@@ -12,11 +12,208 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(readr)
+library(car)
+rm(list=ls())
 ```
 
 
 ```{r}
-df <- read.csv2('aug_train.csv')
+df <- read.csv('aug_train.csv')
+summary(df)
+str(df)
+```
+
+First of all, we need to convert each variable to its appropriate data type.
+This means that if a variable is categorical, it should be converted to a factor, whereas if it is numerical, it should be converted to a numeric type.
+
+```{r}
+df$city <- as.factor(df$city)
+df$gender <- as.factor(df$gender)
+df$relevent_experience <- as.factor(df$relevent_experience)
+df$enrolled_university <- as.factor(df$enrolled_university)
+df$education_level <- as.factor(df$education_level)
+df$major_discipline <- as.factor(df$major_discipline)
+df$company_type <- as.factor(df$company_type)
+# PER LA VARIABLE EXPERIENCIA, EL QUE HE PENSAT FER ÉS BÀSICAMENT ELS QUE TENEN MES DE 20 (>20) ELS HI DEIXO EL VALOR DE 20, PER ALS QUE TENEN UN VALOR "<1" ELS HI DEIXO UN VALOR DE 1, EN CAS QUE VOLGUEM TRACTARLA COM A NUMERICA (PODEM POSAR EN COMPTES DE UN 1 UN 0).
+experience_clean <- gsub("[^0-9]", "", df$experience)
+df$experience <-  as.numeric(experience_clean)
+df$last_new_job <- as.factor(df$last_new_job)
+df$company_size <- as.factor(df$company_size)
+```
+
+
+```{r}
 summary(df)
 ```
+**SUMMARY**
+Here we can observe that there is a large amount of missing or inconsistent data.
+In most variables, there are several observations with missing values, which indicates data quality issues.
+
+We are therefore aware of this inconsistency and will apply imputation methods to address the problem and improve the overall data quality, as this is something commonly encountered in real-world datasets.
+
+**VARIABLE 1 enrollee_id**
+
+The variable enrollee_id is used to uniquely identify each candidate within the dataset sample.
+Therefore, it is considered a numeric identification variable, meaning it serves as a unique identifier for each individual or observation, but does not provide any analytical or predictive information about the candidates themselves.
+
+**VARIABLE 2 city**
+```{r}
+# CATEGORICAL VARIABLE.
+sort(table(df$city)); 
+sum(is.na(df$city)); sum(df$city == "")
+```
+
+For this variable, we can observe that the three cities with the highest number of candidates are:
+  - city_103 --> 4.355 candidates
+  - city_21 --> 2.702 candidates
+  - city_16 --> 1.533 candidates
+
+On the other hand, the cities with the lowest representation are:
+  - city_140 --> 1 candidate
+  - city_171 --> 1 candidate
+  - city_111 --> 3 candidates (same as city_121 and city_129).
+
+Here we have not missing data or blank values. 
+
+**VARIABLE 3 CITY_DEVELOPMENT_INDEX**
+```{r}
+summary(df$city_development_index)
+sum(is.na(df$city_development_index)) # The variable 'city_development_index' contains no missing or blank values.
+Boxplot(df$city_development_index)
+# As we can see with the Boxplot we have some values that are outliers, let's see how many of them and the one's that are missing.
+var_out <- summary(df$city_development_index); var_out
+iqr <- var_out[5] - var_out[2]; iqr
+llmild <- which(df$city_development_index < var_out[2] - 1.5*iqr | df$city_development_index > var_out[5] + 1.5*iqr); length(llmild)
+llsev <- which(df$city_development_index < var_out[2] - 3*iqr | df$city_development_index > var_out[5] + 3*iqr); length(llsev)
+# We have 17 univariate outlaiers in the city development index
+Boxplot(df$city_development_index)
+abline(h = var_out[2] - 1.5*iqr, col = 'green')
+abline(h = var_out[5] + 1.5*iqr, col = 'red')
+abline(h = var_out[2] - 3*iqr, col = 'green')
+abline(h = var_out[5] + 3*iqr, col = 'red')
+df[llmild,]
+sum(is.na(df$city_development_index)); sum(df$city_development_index == "")
+
+```
+For this variable, we identified a total of 17 univariate outliers, all of which belong to the same city (city_33).
+These cases stand out because most of the candidates do not have relevant experience.
+Similarly, in the major_discipline variable, the majority are from the STEM field, and it is also noticeable that most of them hold a graduate degree.
+
+In that variable we haven't missing data or blank values.
+
+**VARIABLE 4 GENDER**
+```{r}
+table(df$gender); prop.table(table(df$gender))
+pie(table(df$gender))
+sum(is.na(df$gender)); sum(df$gender == "");
+df$gender[which(df$gender == "")] <- NA
+```
+In this variable, we can observe that the proportion of males is significantly higher compared to other genders.
+Specifically, males account for 69% of the total sample.
+
+This imbalance can be clearly seen both graphically and through the statistical results obtained using the prop.table() function, which confirm this finding.
+Therefore, we can conclude that the majority of individuals in our dataset are male.
+
+Finally comment that we have a total of 4508 values that are blank, so we consider this as missing data. 
+
+
+**VARIABLE 5 RELEVENT EXPERIENCE**
+
+```{r}
+table(df$relevent_experience); prop.table(table(df$relevent_experience))
+pie(table(df$relevent_experience))
+sum(is.na(df$relevent_experience)); sum(df$relevent_experience == "")
+```
+We can observe that the vast majority of individuals in the dataset have relevant experience, accounting for approximately 72% of the total sample.
+It is also important to note that this variable contains no missing or blank values, which indicates good data quality for this feature.
+
+**VARIABLE 6 enrolled_university**
+
+```{r}
+table(df$enrolled_university); prop.table(table(df$enrolled_university))
+pie(table(df$enrolled_university))
+sum(is.na(df$enrolled_university)); sum(df$enrolled_university == "")
+df$enrolled_university[which(df$enrolled_university == "")] <- NA
+```
+
+It is worth noting that, for this variable, the majority of observations fall under the category no_enrollment.
+Specifically, a total of 13,817 individuals, representing approximately 72.12% of the sample, have the value enrolled_university = no_enrollment.
+
+It is also important to note that this variable contains a total of 386 blank values.
+Therefore, we will replace these blank entries with NA in order to handle them properly during the data cleaning and analysis process.
+
+**VARIABLE 7 EDUCATION LEVEL**
+
+```{r}
+table(df$education_level); prop.table(table(df$education_level))
+sum(is.na(df$education_level)); sum(df$education_level == "")
+df$education_level[which(df$education_level == "")] <- NA
+```
+
+In this variable, we can observe that most observations correspond to individuals with a graduate-level education, accounting for approximately 60.53% of the total, followed by those with a master’s degree at 22.76%.
+Therefore, we can conclude that the vast majority of individuals hold either a bachelor’s or a master’s degree.
+
+It is also worth noting that, as in other variables (460 cases), this one contains blank values, which we will replace with NA to ensure consistent handling of missing data during the analysis.
+
+**VARIABLE 8 MAJOR DISCIPLINE**
+
+```{r}
+table(df$major_discipline); prop.table(table(df$major_discipline))
+pie(table(df$major_discipline))
+sum(is.na(df$major_discipline)); sum(df$major_discipline == "")
+df$major_discipline[which(df$major_discipline == "")] <- NA
+```
+
+In this variable, we can observe that the dominant discipline is STEM, with a total of 14,492 observations, representing approximately 75.64% of the dataset.
+This indicates that most candidates come from science, technology, engineering, or mathematics backgrounds.
+
+However, it is important to note that this variable contains 2,813 blank values. Although there are no explicit missing (NA) entries, these blank cells are treated as missing data, and we have therefore replaced them with NA to ensure consistency in the handling of missing values.
+
+
+**VARIABLE 9 EXPERIENCE **
+
+```{r}
+summary(df$experience)
+Boxplot(df$experience)
+# A PRIORI WE HAVE NO OUTLIER VALUES, LET'S PROVE BUT LOOKING TO THE BOXPLOT WE CAN SEE THAT WE HAVE NO OUTLIERS FOR THIS VARIABLE.
+
+var_out <- summary(df$experience); var_out
+iqr <- var_out[5] - var_out[2]; iqr
+
+llmild <- which(df$experience < var_out[2] - 1.5*iqr | df$experience > var_out[5] + 1.5*iqr); length(llmild)
+llsev <- which(df$experience < var_out[2] - 3*iqr | df$experience > var_out[5] + 3*iqr); length(llsev)
+
+Boxplot(df$experience)
+abline(h = var_out[2] - 1.5*iqr, col = 'green')
+abline(h = var_out[5] + 1.5*iqr, col = 'red')
+abline(h = var_out[2] - 3*iqr, col = 'green')
+abline(h = var_out[5] + 3*iqr, col = 'red')
+
+```
+For the experience variable, we can observe that there are no outliers present.
+This was verified both graphically, using a boxplot, and numerically, by checking for mild and extreme outliers.
+However, it is important to note that this variable contains missing data, with a total of 65 NA values.
+
+**VARIABLE 10 COMPANY SIZE**
+
+```{r}
+table(df$company_size); prop.table(table(df$company_size))
+barplot(table(df$company_size))
+sum(is.na(df$company_size)); sum(df$company_size == "")
+df$company_size[which(df$company_size == "")] <- NA
+```
+In this variable, we can observe that it is one of the features with the highest amount of missing data, with approximately 31% of blank or missing entries.
+Among the valid observations, the most represented category is company_size = 100–500, accounting for 13.42%, followed by 10000+ with 10.54%.
+
+Regarding the blank values (a total of 5,938), we will replace them with NA in order to impute them properly during the subsequent stages of data processing.
+
+**VARIABLE 11 COMPANY TYPE**
+
+```{r}
+table(df$company_type);prop.table(table(df$company_type))
+pie(table(df$company_type))
+sum(is.na(df$company_type)); sum(df$company_type == "")
+```
+
+
 
