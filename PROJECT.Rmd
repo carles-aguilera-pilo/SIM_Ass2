@@ -1,0 +1,22 @@
+---
+title: "Assignment 2"
+author: "Berta Torrents & Carles Aguilera"
+date: "2025-11-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(readr)
+```
+
+
+```{r}
+df <- read.csv2('aug_train.csv')
+summary(df)
+```
+
