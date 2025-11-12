@@ -12,7 +12,10 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(readr)
+library(chemometrics)
+library(mice)
 library(car)
+library(FactoMineR)
 rm(list=ls())
 ```
 
@@ -39,6 +42,7 @@ experience_clean <- gsub("[^0-9]", "", df$experience)
 df$experience <-  as.numeric(experience_clean)
 df$last_new_job <- as.factor(df$last_new_job)
 df$company_size <- as.factor(df$company_size)
+df$target <- as.factor(df$target)
 ```
 
 
@@ -94,12 +98,19 @@ abline(h = var_out[5] + 3*iqr, col = 'red')
 df[llmild,]
 sum(is.na(df$city_development_index)); sum(df$city_development_index == "")
 
+hist(df$city_development_index, freq = FALSE)
+curve(dnorm(x, mean = mean(df$city_development_index), sd=sd(df$city_development_index)), lwd = 2, add = T)
+
+hist(log(df$city_development_index), freq = FALSE)
+curve(dnorm(x, mean = mean(log(df$city_development_index)), sd=sd(log(df$city_development_index))), lwd = 2, add = T)
+
 ```
 For this variable, we identified a total of 17 univariate outliers, all of which belong to the same city (city_33).
 These cases stand out because most of the candidates do not have relevant experience.
-Similarly, in the major_discipline variable, the majority are from the STEM field, and it is also noticeable that most of them hold a graduate degree.
-
+Similarly, in the major_discipline variable, the majority are from the STEM field, and it is also noticeable that most of them hold a graduate degree. Also we can observe the minimum value that is 0.448 and the maximum one that is 0.9490.
 In that variable we haven't missing data or blank values.
+
+We can observe that the distribution of this variable deviates from normality, and that even after applying a logarithmic transformation, it cannot be properly normalized.
 
 **VARIABLE 4 GENDER**
 ```{r}
@@ -189,10 +200,18 @@ abline(h = var_out[5] + 1.5*iqr, col = 'red')
 abline(h = var_out[2] - 3*iqr, col = 'green')
 abline(h = var_out[5] + 3*iqr, col = 'red')
 
+hist(df$experience, freq = FALSE)
+curve(dnorm(x,mean=mean(df$experience), sd=sd(df$experience)), lwd = 2, add = T)
+
+hist(log(df$experience), freq = FALSE)
+curve(dnorm(x,mean=mean(log(df$experience)), sd=sd(log(df$experience))), lwd = 2, add = T)
+
 ```
 For the experience variable, we can observe that there are no outliers present.
 This was verified both graphically, using a boxplot, and numerically, by checking for mild and extreme outliers.
-However, it is important to note that this variable contains missing data, with a total of 65 NA values.
+However, it is important to note that this variable contains missing data, with a total of 65 NA values.Also we can observe the minimum value that is => 1, and the maximum value that is => 20.
+
+We can observe that the distribution of this variable deviates from normality, and that even after applying a logarithmic transformation, it cannot be properly normalized.
 
 **VARIABLE 10 COMPANY SIZE**
 
@@ -213,7 +232,171 @@ Regarding the blank values (a total of 5,938), we will replace them with NA in o
 table(df$company_type);prop.table(table(df$company_type))
 pie(table(df$company_type))
 sum(is.na(df$company_type)); sum(df$company_type == "")
+df$company_type[which(df$company_type == "")] <- NA
 ```
+
+Regarding the company_type variable, it is worth noting that more than half of the observations correspond to the Pvt Ltd category.
+Therefore, we can conclude that the majority of individuals in the dataset are employed in private limited companies.
+
+Additionally, this variable contains missing data (blank values), which will be treated as NA.
+In total, there are 6,140 blank entries, which will be handled or imputed during later stages of the analysis.
+
+**VARIABLE 12 LAST_NEW_JOB**
+
+```{r}
+table(df$last_new_job); prop.table(table(df$last_new_job))
+barplot(table(df$last_new_job))
+sum(is.na(df$last_new_job)); sum(df$last_new_job == "")
+df$last_new_job[which(df$last_new_job == "")] <- NA
+```
+
+
+In this variable, we can observe that the most frequent value is one year for the last_new_job feature, representing approximately 42% of the total observations.
+
+It is also important to note that this variable contains 423 blank values, which will be treated as missing (NA) so that they can be properly imputed or handled during the subsequent stages of the analysis.
+
+
+**VARIABLE 13 training_hours**
+
+```{r}
+var_out <- summary(df$training_hours); var_out
+Boxplot(df$training_hours)
+iqr <- var_out[5] - var_out[2]; iqr
+
+llmild <- which(df$training_hours < var_out[2] - 1.5*iqr | df$training_hours > var_out[5] + 1.5*iqr); length(llmild)
+llsev <- which(df$training_hours < var_out[2] - 3*iqr | df$training_hours > var_out[5] + 3*iqr); length(llsev)
+
+Boxplot(df$training_hours)
+abline(h = var_out[2] - 1.5*iqr, col = 'green')
+abline(h = var_out[5] + 1.5*iqr, col = 'red')
+abline(h = var_out[2] - 3*iqr, col = 'green')
+abline(h = var_out[5] + 3*iqr, col = 'red')
+
+hist(df$training_hours, freq = FALSE)
+curve(dnorm(x,mean = mean(df$training_hours), sd = sd(df$training_hours)), lwd = 2, add = T)
+
+hist(log(df$training_hours), freq = FALSE)
+curve(dnorm(x,mean = mean(log(df$training_hours)), sd = sd(log(df$training_hours))), lwd = 2, add = T)
+
+
+```
+
+
+In this variable, it is worth noting that a total of 275 outliers and 709 mild outliers have been identified.
+There are no missing values in this feature.
+The maximum recorded value is 336 hours, while the minimum value is 1 hour.
+
+We can observe that the distribution of this variable deviates from normality, and that even after applying a logarithmic transformation, it cannot be properly normalized.
+
+**VARIABLE 14 target**
+
+```{r}
+table(df$target); prop.table(table(df$target))
+barplot(table(df$target))
+sum(is.na(df$target)); sum(df$target == "")
+```
+The target variable is binary and indicates whether individuals are seeking a job change or not.
+Thus, this feature allows us to analyze the proportion of candidates currently looking for new employment opportunities.
+
+We can observe that 75% of individuals have a value of 0, meaning they are not seeking a job change, while 24.93% have a value of 1, indicating that they are actively looking for a new job.
+
+It is also important to note that this binary target variable contains no missing values.
+
+
+
+```{r}
+colSums(is.na(df))
+```
+Finally, we can observe the total number of missing values for each variable or factor.
+After the data cleaning process, blank values have been converted into NA, ensuring that all missing information is consistently represented.
+
+This transformation greatly simplifies the handling of missing data, particularly during the imputation stage, as it allows for a clearer and more consistent approach to identifying and managing missing values.
+
+############################################### TRANSFORMING VARIABLES & IMPUTATION  ##################################################
+#                                                                                                                                     #
+#######################################################################################################################################
+
+We will now proceed to discretize each of the numerical variables, that is, convert them into categorical variables based on defined ranges or intervals.
+Thus, we will go through each numerical variable individually, applying the discretization process to obtain its corresponding categorical version.
+
+```{r}
+
+# CITY DEVELOPMENT INDEX.
+breaks <- quantile(df$city_development_index, prob = seq(0,1,0.20)); breaks
+df$f.city_development_index <- cut(df$city_development_index, unique(breaks), include.lowest = TRUE)
+summary(df$f.city_development_index);
+
+# TRAINING HOURS
+breaks3 <- quantile(df$training_hours, probs = seq(0,1,0.2)); breaks3
+df$f.training_hours <- cut(df$training_hours, breaks3)
+summary(df$f.training_hours)
+```
+
+
+Once some of the variables have been discretized, one additional step is still required: the imputation of missing (NA) values.
+This process will allow us to complete the dataset and obtain a fully populated version without missing entries.
+After performing imputation, we will then be able to discretize the numerical variables that currently cannot be transformed due to the presence of missing values, such as the experience variable.
+
+```{r}
+res.mice <- mice(df[,c(2:16)])
+df_imp <- complete(res.mice)
+summary(df); summary(df_imp)
+df[,c(2:16)] <- df_imp
+
+```
+
+
+```{r}
+# EXPERIENCE the one that remain to be converted to a factor.
+breaks2 <- quantile(df$experience, prob = seq(0,1,0.2)); breaks2
+df$f.experience <- cut(df$experience, breaks2, include.lowest = TRUE)
+summary(df$f.experience)
+```
+
+
+############################################################ PROFILING  ###############################################################
+#                                                                                                                                     #
+#######################################################################################################################################
+
+
+```{r}
+res.cat <- catdes(df[,c(2:16)], num.var = 13)
+res.cat$quanti.var
+res.cat$quanti
+res.cat$category
+```
+
+We can highlight that the variables most strongly associated with the target variable (i.e., those with the highest Eta2 values) are:
+  - city_development_index
+  - experience
+
+The main differences between individuals seeking a new job (value 1) and those not seeking one (value 0) lie primarily in the fact that job seekers tend to have, on average, less work experience and a lower city development index compared to the overall mean.
+
+Furthermore, within the group of individuals actively looking for a new job, there is a higher concentration in the city development index range [0.448, 0.691].
+This group is also characterized by a predominance of full-time course participants and individuals with no relevant experience, traits that are more common among job seekers.
+The most frequent cities within this group are city_21, city_11, and city_121, and there is also a higher proportion of graduates compared to the overall sample mean.
+
+We will now proceed to identify observations that can be considered multivariate outliers, meaning those that exhibit atypical values when multiple variables are analyzed simultaneously.
+The goal is to determine which observations are true multivariate outliers and to analyze which specific variables or characteristics contribute to their outlier status.
+
+```{r}
+res.mout <- Moutlier(df[,c(3,9,13)])
+plot(res.mout$md, res.mout$rd)
+abline(h = res.mout$cutoff, col = 'red')
+abline(v = res.mout$cutoff, col = 'red')
+
+idx <- which(res.mout$md > res.mout$cutoff & res.mout$rd > res.mout$cutoff); length(idx)
+df$mvout <- 0
+df$mvout[idx] <- 1
+df$mvout <- factor(df$mvout, labels = c("MvoutN", "MvoutY"))
+res.cat <- catdes(df[,c(2:18)], num.var = 17)
+res.cat$quanti.var
+res.cat$quanti
+```
+
+
+
+
 
 
 
