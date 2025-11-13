@@ -1,29 +1,280 @@
 ---
-title: "berta_prova_modi"
-output: html_document
-date: "2025-11-13"
+title: "Assignment 1"
+author: "Berta Torrents & Carles Aguilera"
+date: "December 2025"
+output:
+  word_document: default
+  pdf_document:
+    latex_engine: xelatex
+geometry: margin=1in
 ---
+````{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  results = 'markup',
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 7,
+  fig.height = 5
+)
+````
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+PREGUNTES LIDIA:
+- Com mirem els duplicates??
+- Podem assumir que els NA de gender son female??
+
+# Data preparation
+
+First, we clear the past plots and clean the workspace. We also load the libraries.
+
+```{r}
+set.seed(123)
+
+# Clear plots
+if(!is.null(dev.list())) dev.off()
+
+# Clean workspace
+rm(list=ls())
+
+# Libraries
+library(mice)
+library(forcats)
+library(nortest)
+library(chemometrics)
+library(corrplot)
+library(FactoMineR)
+library(car)
+library(MASS)
+library(effects)
 ```
 
-## R Markdown
+Then we read the data from the csv. The data frame initially has 19158 observations.
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r}
+# Read data
+df <- read.csv('aug_train.csv', header = T)
+nrow(df)
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+summary(df)
 ```
 
-## Including Plots
+# Data preparation
 
-You can also embed plots, for example:
+We will first do an exploratory data analysis of the data frame variables. In this analysis, we will first check the data types and fix structural errors and we will count the number of missing values, errors and outliers.
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+## enrollee_id
+
+The employee_id variable was stored as an integer. Since it corresponds to the unique id identifier, it should be converted into a factor. As it was expected, the id variable does not contain any missing values and it has 19158 unique values (one for each observation).
+
+Note that this variable serves as a unique identifier for each individual or observation, but does not provide any analytical or predictive information about the candidates themselves.
+
+```{r}
+class(df$enrollee_id)
+
+df$enrollee_id <- as.factor(df$enrollee_id)
+
+summary(df$enrollee_id)
+
+sum(is.na(df$enrollee_id))
+
+length(unique(df$enrollee_id))
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+## city
+
+The city variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. 
+
+We can observe that the three cities with the highest number of candidates are:
+  - city_103 --> 4.355 candidates
+  - city_21 --> 2.702 candidates
+  - city_16 --> 1.533 candidates
+
+On the other hand, the cities with the lowest representation are:
+  - city_140 --> 1 candidate
+  - city_171 --> 1 candidate
+  - city_111 --> 3 candidates (same as city_121 and city_129).
+
+This variable does not contain missing values nor blank values. Moreover, this data frame contains 123 different city values.
+
+Since city captures meaningful geographic variation that can influence is a person is looking for a job change, this variable might be useful to describe or predict the target variable. However, this variable has too many different levels, which makes it less suitable for the specific case of linear regression model.
+
+```{r}
+class(df$city)
+
+df$city <- as.factor(df$city)
+
+sort(table(df$city))
+
+sum(is.na(df$city))
+
+length(unique(df$city))
+```
+## city_development_index
+
+The city_development_index was stored as a numeric variable ranging from 0.448 to 0.949. Since the median (0.9030) and mean (0.8288) are far from the minimum value, it seems like this variable will contain some outliers.
+
+It does not contail any missing values.
+
+```{r}
+class(df$city_development_index)
+
+summary(df$city_development_index)
+
+sum(is.na(df$city_development_index)); sum(df$city_development_index == "")
+```
+
+The distribution is extremely right-skewed. The histogram shows that almost all observations are concentrated around a single very high value (around 0.9), with only a few spread across lower values. Most cities have a high city development index. In fact, even after applying a logarithmic transformation, it cannot be properly normalized.
+
+```{r}
+hist(df$city_development_index, freq = FALSE)
+curve(dnorm(x, mean = mean(df$city_development_index), sd=sd(df$city_development_index)), lwd = 2, add = T, col = "red")
+
+hist(log(df$city_development_index), freq = FALSE)
+curve(dnorm(x, mean = mean(log(df$city_development_index)), sd=sd(log(df$city_development_index))), lwd = 2, add = T, col = "red")
+```
+As it was expected, the boxplot confirms that there are some lower outlier. 
+
+To formally identify outliers, we used the Interquartile Range (IQR) method. As we learned in class, the IQR is calculated as the difference between the third quartile (Q3) and the first quartile (Q1), representing the spread of the middle 50% of the data. Using this measure, two sets of thresholds were computed: mild outliers (values beyond 1.5×IQR from Q1 or Q3) and severe outliers (values beyond 3×IQR from Q1 or Q3). Any value outside these limits is considered an outlier.
+
+It seems like this variable has 17 univariate mild outliers and 0 univariate severe outliers, all of which belong to the same city (city_33). The vast majority of the candidates from city_33 do not have relevant experience. Similarly, the major_discipline variable shows that the vast majority of them are from STEM field. It is also noticeable that most of them hold a graduate degree.
+
+```{r}
+Boxplot(df$city_development_index)
+
+var_out <- summary(df$city_development_index); var_out
+iqr <- var_out[5] - var_out[2]; iqr
+llmild <- which(df$city_development_index < var_out[2] - 1.5*iqr | df$city_development_index > var_out[5] + 1.5*iqr); length(llmild)
+llsev <- which(df$city_development_index < var_out[2] - 3*iqr | df$city_development_index > var_out[5] + 3*iqr); length(llsev)
+
+Boxplot(df$city_development_index)
+abline(h = var_out[2] - 1.5*iqr, col = 'green')
+abline(h = var_out[5] + 1.5*iqr, col = 'red')
+abline(h = var_out[2] - 3*iqr, col = 'green')
+abline(h = var_out[5] + 3*iqr, col = 'red')
+
+df[llmild,]
+```
+
+## gender
+
+The gender variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has three levels: Male, Female and Other.
+
+It is clearly a data quality problem that 4508 observations (in other words, a 23.5% of the observations) of this variable are missing. These blank observations have been set as missing values that should lately be taken into account.
+
+Another evident issue with this variable is that it is highly unbalanced. Only 6% of the observations correspond to the female level, whereas 69% correspond to the male level. This imbalance can be clearly seen both graphically, using a barplot, and statistically, using the prop.table() function, which confirm this finding.
+
+```{r}
+class(df$gender)
+
+df$gender <- as.factor(df$gender)
+
+summary(df$gender)
+
+prop.table(table(df$gender))
+barplot(table(df$gender))
+
+sum(is.na(df$gender)); sum(df$gender == "");
+df$gender[which(df$gender == "")] <- NA
+```
+
+## relevent_experience
+
+The relevent_experience variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has two levels: Has relevent experience and No relevent experience.
+
+This variable contains no missing or blank values, which indicates good data quality for this feature.
+
+Note that this variable is also highly unbalanced. Only 28% of the observations correspond to the non relevent experience level, whereas almost 72% correspond to the has relevent experience level. Hence, the vast majority of individuals in the dataset have relevant experience.
+
+```{r}
+class(df$relevent_experience)
+
+df$relevent_experience <- as.factor(df$relevent_experience)
+
+summary(df$relevent_experience)
+
+prop.table(table(df$relevent_experience))
+barplot(table(df$relevent_experience))
+
+sum(is.na(df$relevent_experience)); sum(df$relevent_experience == "");
+```
+
+## enrolled_university
+
+The enrolled_university variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has three levels: Full time course, No enrollment and Part time course.
+
+Note that 386 observations (in other words, a 2% of the observations) of this variable are missing. These blank observations have been set as missing values that should lately be taken into account.
+
+It is worth noting that this variable is highly unbalanced, with the majority of observations falling under the category no_enrollment. Specifically, 13817 individuals, representing approximately 72.12% of the sample, have enrolled_university = no_enrollment. Only 19.6% of the observations correspond to Full time course, and 6% correspond to Part time course.
+
+```{r}
+class(df$enrolled_university)
+
+df$enrolled_university <- as.factor(df$enrolled_university)
+
+summary(df$enrolled_university)
+
+prop.table(table(df$enrolled_university))
+
+barplot(table(df$enrolled_university))
+
+sum(is.na(df$enrolled_university)); sum(df$enrolled_university == "")
+df$enrolled_university[which(df$enrolled_university == "")] <- NA
+```
+
+## education_level
+
+The education_level variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has five levels: Graduate, High School, Masters, Phd and Primary School.
+
+Note that 460 observations (in other words, a 2.4% of the observations) of this variable are missing. These blank observations have been set as missing values that should lately be taken into account.
+
+Moreover, this variable is highly unbalanced. The vast majority of observations (60.5%) correspond to the Graduate level, followed by Masters at 22.7%. The High School and Primary School levels account for only 10.5% and 1.6% of the sample, respectively. This indicates that most of the individuals in the dataset have higher education, beyond the mandatory levels.
+
+```{r}
+class(df$education_level)
+
+df$education_level <- as.factor(df$education_level)
+
+summary(df$education_level)
+
+prop.table(table(df$education_level))
+barplot(table(df$education_level))
+
+sum(is.na(df$education_level)); sum(df$education_level == "");
+df$gender[which(df$education_level == "")] <- NA
+```
+
+## major_discipline
+
+The major_discipline variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has six levels: Arts, Business Degree, Humanities, No Major, Other and STEM.
+
+It should be highlighted that 2813 observations (in other words, a 14.6% of the observations) of this variable are missing. These blank observations have been set as missing values that should lately be taken into account.
+
+It van be clearly seen that this variable is highly unbalanced. The dominant discipline is STEM, with a total of 14492 observations, representing approximately 75.64% of the dataset. This indicates that most candidates come from science, technology, engineering, or mathematics backgrounds. The remaining disciplines each account for only 1–3.5% of the population.
+
+```{r}
+class(df$major_discipline)
+
+df$major_discipline <- as.factor(df$major_discipline)
+
+summary(df$major_discipline)
+
+prop.table(table(df$major_discipline))
+barplot(table(df$major_discipline))
+
+sum(is.na(df$major_discipline)); sum(df$major_discipline == "");
+df$gender[which(df$major_discipline == "")] <- NA
+```
+
+## experience
+
+## company_size
+
+## company_type
+
+## last_new_job
+
+## training_hours
+
+## target
+
+## Individuals quality report
