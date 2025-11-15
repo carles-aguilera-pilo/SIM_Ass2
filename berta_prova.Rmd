@@ -22,6 +22,9 @@ knitr::opts_chunk$set(
 PREGUNTES LIDIA:
 - Com mirem els duplicates??
 - Podem assumir que els NA de gender son female??
+- Should we impute missing categorical variables? Or state them ans unknown category?
+- Te sentit fer experience numerica?? i agrupar-la???
+- Te sentit imputar totes les variables? o les que tenen un 30% no?
 
 # Data preparation
 
@@ -46,6 +49,7 @@ library(FactoMineR)
 library(car)
 library(MASS)
 library(effects)
+library(naniar)
 ```
 
 Then we read the data from the csv. The data frame initially has 19158 observations.
@@ -64,7 +68,7 @@ We will first do an exploratory data analysis of the data frame variables. In th
 
 ## enrollee_id
 
-The employee_id variable was stored as an integer. Since it corresponds to the unique id identifier, it should be converted into a factor. As it was expected, the id variable does not contain any missing values and it has 19158 unique values (one for each observation).
+The enrollee_id variable was stored as an integer. Since it corresponds to the unique id identifier, it should be converted into a factor. As it was expected, the id variable does not contain any missing values and it has 19158 unique values (one for each observation).
 
 Note that this variable serves as a unique identifier for each individual or observation, but does not provide any analytical or predictive information about the candidates themselves.
 
@@ -109,11 +113,12 @@ sum(is.na(df$city))
 
 length(unique(df$city))
 ```
+
 ## city_development_index
 
 The city_development_index was stored as a numeric variable ranging from 0.448 to 0.949. Since the median (0.9030) and mean (0.8288) are far from the minimum value, it seems like this variable will contain some outliers.
 
-It does not contail any missing values.
+It does not contain any missing values.
 
 ```{r}
 class(df$city_development_index)
@@ -132,6 +137,7 @@ curve(dnorm(x, mean = mean(df$city_development_index), sd=sd(df$city_development
 hist(log(df$city_development_index), freq = FALSE)
 curve(dnorm(x, mean = mean(log(df$city_development_index)), sd=sd(log(df$city_development_index))), lwd = 2, add = T, col = "red")
 ```
+
 As it was expected, the boxplot confirms that there are some lower outlier. 
 
 To formally identify outliers, we used the Interquartile Range (IQR) method. As we learned in class, the IQR is calculated as the difference between the third quartile (Q3) and the first quartile (Q1), representing the spread of the middle 50% of the data. Using this measure, two sets of thresholds were computed: mild outliers (values beyond 1.5×IQR from Q1 or Q3) and severe outliers (values beyond 3×IQR from Q1 or Q3). Any value outside these limits is considered an outlier.
@@ -141,15 +147,16 @@ It seems like this variable has 17 univariate mild outliers and 0 univariate sev
 ```{r}
 Boxplot(df$city_development_index)
 
-var_out <- summary(df$city_development_index); var_out
-iqr <- var_out[5] - var_out[2]; iqr
-llmild <- which(df$city_development_index < var_out[2] - 1.5*iqr | df$city_development_index > var_out[5] + 1.5*iqr); length(llmild)
-llsev <- which(df$city_development_index < var_out[2] - 3*iqr | df$city_development_index > var_out[5] + 3*iqr); length(llsev)
+var_out <- summary(df$city_development_index)
+iqr <- var_out[5] - var_out[2]
+
+llmild <- which((df$training_hours < var_out[2] - 1.5*iqr & df$training_hours > var_out[2] - 3*iqr) | (df$training_hours > var_out[5] + 1.5*iqr & df$training_hours < var_out[5] + 3*iqr)); length(llmild)
+llsev <- which(df$training_hours < var_out[2] - 3*iqr | df$training_hours > var_out[5] + 3*iqr); length(llsev)
 
 Boxplot(df$city_development_index)
 abline(h = var_out[2] - 1.5*iqr, col = 'green')
-abline(h = var_out[5] + 1.5*iqr, col = 'red')
-abline(h = var_out[2] - 3*iqr, col = 'green')
+abline(h = var_out[5] + 1.5*iqr, col = 'green')
+abline(h = var_out[2] - 3*iqr, col = 'red')
 abline(h = var_out[5] + 3*iqr, col = 'red')
 
 df[llmild,]
@@ -240,7 +247,7 @@ prop.table(table(df$education_level))
 barplot(table(df$education_level))
 
 sum(is.na(df$education_level)); sum(df$education_level == "");
-df$gender[which(df$education_level == "")] <- NA
+df$education_level[which(df$education_level == "")] <- NA
 ```
 
 ## major_discipline
@@ -249,7 +256,7 @@ The major_discipline variable was stored as a character. Since it corresponds to
 
 It should be highlighted that 2813 observations (in other words, a 14.6% of the observations) of this variable are missing. These blank observations have been set as missing values that should lately be taken into account.
 
-It van be clearly seen that this variable is highly unbalanced. The dominant discipline is STEM, with a total of 14492 observations, representing approximately 75.64% of the dataset. This indicates that most candidates come from science, technology, engineering, or mathematics backgrounds. The remaining disciplines each account for only 1–3.5% of the population.
+It can be clearly seen that this variable is highly unbalanced. The dominant discipline is STEM, with a total of 14492 observations, representing approximately 75.64% of the dataset. This indicates that most candidates come from science, technology, engineering, or mathematics backgrounds. The remaining disciplines each account for only 1-3.5% of the population.
 
 ```{r}
 class(df$major_discipline)
@@ -262,19 +269,201 @@ prop.table(table(df$major_discipline))
 barplot(table(df$major_discipline))
 
 sum(is.na(df$major_discipline)); sum(df$major_discipline == "");
-df$gender[which(df$major_discipline == "")] <- NA
+df$major_discipline[which(df$major_discipline == "")] <- NA
 ```
 
 ## experience
 
+The experience variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has 21 levels: <1, 1-19, >20.
+
+Note that 65 observations (in other words, a 0.3% of the observations) of this variable are missing. These blank observations have been set as missing values that should lately be taken into account.
+
+Moreover, this variable is highly unbalanced. The vast majority of observations (17.15%) correspond to people with more than 20 years of experience, as this category groups many experience levels together. Therefore, it might be a good idea to regroup this variable to achieve a more balanced distribution.
+
+```{r}
+class(df$experience)
+
+x <- c("", "<1", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", ">20")
+
+df$experience <- factor(df$experience, levels = x, ordered = TRUE)
+
+summary(df$experience)
+
+prop.table(table(df$experience))
+barplot(table(df$experience))
+
+sum(is.na(df$experience)); sum(df$experience == "");
+df$experience[which(df$experience == "")] <- NA
+```
+
+DESPRÉS D'IMPUTAR I AGRUPAR LA VARIABLE ESTARIA BE ESTUDIAR:
+```{r}
+prop.table(table(df$relevent_experience, df$experience))
+```
 ## company_size
+
+The company_size variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has eight levels ranging from less than 10 employees to more than 10000.
+
+It should be highlighted that 5938 observations (in other words, a 31% of the observations) of this variable are missing. That is a serious data quality problem. These blank observations have been set as missing values that should lately be taken into account.
+
+Nonetheless, this variable is slightly unbalanced. The category with the highest proportion is 100-500, representing 13.42% of the dataset. In contrast, the category 5000-9999 has the lowest proportion, accounting for only 3% of the observations.
+
+```{r}
+class(df$company_size)
+
+x <- c("", "<10", "10/49", "50-99", "100-500", "500-999", "1000-4999", "5000-9999", "10000+")
+
+df$company_size <- factor(df$company_size, levels = x, ordered = TRUE)
+
+summary(df$company_size)
+
+prop.table(table(df$company_size))
+barplot(table(df$company_size))
+
+sum(is.na(df$company_size)); sum(df$company_size == "");
+df$company_size[which(df$company_size == "")] <- NA
+```
 
 ## company_type
 
+The company_type variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has six levels: Early Stage Startup, Funded Startup, NGO, Other, Public Sector and Pvt Ltd.
+
+A clear data quality problem is shown for this variable, since 6140 observations (in other words, a 32% of the observations) of this variable are missing. These blank observations have been set as missing values that should lately be taken into account.
+
+This variable is clearly highly unbalanced. In fact, more than half of the observations fall under the Pvt Ltd category, while the remaining company types each account for only 0.6-5% of the population. Therefore, it can be concluded that the majority of individuals in the dataset are employed in private limited companies.
+
+```{r}
+class(df$company_type)
+
+df$company_type <- as.factor(df$company_type)
+
+summary(df$company_type)
+
+prop.table(table(df$company_type))
+barplot(table(df$company_type))
+
+sum(is.na(df$company_type)); sum(df$company_type == "");
+df$company_type[which(df$company_type == "")] <- NA
+```
+
 ## last_new_job
+
+The last_new_job variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has six levels: never, 1-4 and >4.
+
+Note that 423 observations (in other words, a 2.2% of the observations) of this variable are missing. These blank observations have been set as missing values that should lately be taken into account.
+
+In addition, this variable is highly unbalanced. The most frequent value for the last_new_job feature is 1 year, representing approximately 42% of all observations. The least common values are 3 and 4 years, each accounting for only 5.3% of the observations. In other words, most people either change jobs after 1 year or remain in the same job for several years.
+
+```{r}
+class(df$last_new_job)
+
+x <- c("", "never", "1", "2", "3", "4", ">4")
+
+df$last_new_job <- factor(df$last_new_job, levels = x, ordered = TRUE)
+
+summary(df$last_new_job)
+
+prop.table(table(df$last_new_job))
+barplot(table(df$last_new_job))
+
+sum(is.na(df$last_new_job)); sum(df$last_new_job == "");
+df$last_new_job[which(df$last_new_job == "")] <- NA
+```
 
 ## training_hours
 
+The training_hours was stored as an integer variable ranging from 1 to 336. Since the median (47) and mean (65.37) are far from the maximum value, it seems like this variable will contain some outliers.
+
+It does not contain any missing values.
+
+```{r}
+class(df$training_hours)
+
+summary(df$training_hours)
+
+sum(is.na(df$training_hours)); sum(df$training_hours == "")
+```
+
+The distribution is extremely left-skewed. The histogram shows that almost all observations are ranged between 1 and 60 hours, in other words, most people do not follow many training hours. In fact, even after applying a logarithmic transformation, it cannot be properly normalized (null hypothesis of normality for the Kolmogorov-Smirnov and Anderson-Darling tests are rejected).
+
+```{r}
+hist(df$training_hours, freq = FALSE)
+curve(dnorm(x, mean = mean(df$training_hours), sd=sd(df$training_hours)), lwd = 2, add = T, col = "red")
+
+hist(log(df$training_hours), freq = FALSE)
+curve(dnorm(x, mean = mean(log(df$training_hours)), sd=sd(log(df$training_hours))), lwd = 2, add = T, col = "red")
+
+ks.test(log(df$training_hours), "pnorm", mean = mean(log(df$training_hours)), sd = sd(log(df$training_hours)))
+
+ad.test(log(df$training_hours))
+```
+
+As it was expected, the boxplot confirms that there are some upper outlier. 
+
+To formally identify outliers, we also used the Interquartile Range (IQR) method. It seems like this variable has 709 univariate mild outliers and 275 univariate severe outliers.
+
+```{r}
+Boxplot(df$training_hours)
+
+var_out <- summary(df$training_hours)
+iqr <- var_out[5] - var_out[2]
+
+llmild <- which((df$training_hours < var_out[2] - 1.5*iqr & df$training_hours > var_out[2] - 3*iqr) | (df$training_hours > var_out[5] + 1.5*iqr & df$training_hours < var_out[5] + 3*iqr)); length(llmild)
+llsev <- which(df$training_hours < var_out[2] - 3*iqr | df$training_hours > var_out[5] + 3*iqr); length(llsev)
+
+Boxplot(df$training_hours)
+abline(h = var_out[2] - 1.5*iqr, col = 'green')
+abline(h = var_out[5] + 1.5*iqr, col = 'green')
+abline(h = var_out[2] - 3*iqr, col = 'red')
+abline(h = var_out[5] + 3*iqr, col = 'red')
+
+df[llmild,]
+```
+
 ## target
 
+The target variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This is a binary variable that indicates whether individuals are seeking a job change or not. Thus, this feature allows us to analyze the proportion of candidates currently looking for new employment opportunities.
+
+It is important to note that this variable has no missing values. This is crucial because the target variable cannot be imputed, so all its values must be present for the analysis.
+
+It is evident that this variable is highly unbalanced. The vast majority of observations (75%) indicate that individuals are not seeking a job change, whereas only 25% of the sample are looking for a new job.
+
+```{r}
+class(df$target)
+
+df$target <- as.factor(df$target)
+
+summary(df$target)
+
+prop.table(table(df$target))
+barplot(table(df$target))
+
+sum(is.na(df$target)); sum(df$target == "");
+```
+
 ## Individuals quality report
+
+During the exploratory data analysis, it was observed that many variables contain blank observations corresponding to missing values. Therefore, the functions *gg_miss_upset* and *gg_miss_var* from the *naniar* library were applied to study these missing values.
+
+It is worth noting that enrollee_id, city, city_development_index, relevant_experience, training_hours, and the target variable do not have any missing values.
+
+The majority of missing values are found in company_type and company_size, each accounting for approximately 30% of the missing data. These are followed by gender and major_discipline, which contain 23.5% and 14.6% missing values, respectively. Finally, education_level, last_new_job, enrolled_university, and experience only account for 0.3-2.4% of missing values.
+
+As expected, most observations with missing company_size also have missing company_type, indicating a general absence of company-related information. Interestingly, gender has many observations with missing values only in this variable, suggesting that it might not have been mandatory to provide a response.
+
+Not a high proportion of the observations have missing values across all variables, indicating that the missingness is not completely random across the dataset. Instead, it tends to be concentrated in specific variables, such as company_type, company_size, and gender, showing a clear pattern of missingness.
+
+Hence, observations with missing values should not be deleted, as this could introduce bias. Depending on the variable, missing values should either be imputed or the variable should not be used in the analysis.
+
+```{r}
+gg_miss_var(df[c(4,6:12)])
+gg_miss_upset(df[c(4,6:12)])
+```
+
+## Data Imputation
+
+## Transforming variables
+
+FACTOR CITY + TRAINING
+GROUP EXPERIENCE??  
+
