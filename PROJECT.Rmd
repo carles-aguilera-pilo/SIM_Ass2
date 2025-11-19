@@ -7,6 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
 ```
 
 
@@ -38,9 +39,12 @@ df$education_level <- as.factor(df$education_level)
 df$major_discipline <- as.factor(df$major_discipline)
 df$company_type <- as.factor(df$company_type)
 # PER LA VARIABLE EXPERIENCIA, EL QUE HE PENSAT FER ÉS BÀSICAMENT ELS QUE TENEN MES DE 20 (>20) ELS HI DEIXO EL VALOR DE 20, PER ALS QUE TENEN UN VALOR "<1" ELS HI DEIXO UN VALOR DE 1, EN CAS QUE VOLGUEM TRACTARLA COM A NUMERICA (PODEM POSAR EN COMPTES DE UN 1 UN 0).
-experience_clean <- gsub("[^0-9]", "", df$experience)
-df$experience <-  as.numeric(experience_clean)
-df$last_new_job <- as.factor(df$last_new_job)
+df$experience[which(df$experience==">20")] <- 25
+df$experience[which(df$experience == "<1")] <- 0.5
+df$experience <-  as.numeric(df$experience)
+df$last_new_job[which(df$last_new_job == "never")] <- 0
+df$last_new_job[which(df$last_new_job == ">4")] <- 5
+df$last_new_job <- as.numeric(df$last_new_job)
 df$company_size <- as.factor(df$company_size)
 df$target <- as.factor(df$target)
 ```
@@ -117,7 +121,10 @@ We can observe that the distribution of this variable deviates from normality, a
 table(df$gender); prop.table(table(df$gender))
 pie(table(df$gender))
 sum(is.na(df$gender)); sum(df$gender == "");
-df$gender[which(df$gender == "")] <- NA
+df$gender <- as.character(df$gender)
+df$gender[which(df$gender == "" | is.na(df$gender))] <- "NotAnswer"
+df$gender <- as.factor(df$gender)
+summary(df$gender)
 ```
 In this variable, we can observe that the proportion of males is significantly higher compared to other genders.
 Specifically, males account for 69% of the total sample.
@@ -184,6 +191,7 @@ However, it is important to note that this variable contains 2,813 blank values.
 **VARIABLE 9 EXPERIENCE **
 
 ```{r}
+str(df$experience)
 summary(df$experience)
 Boxplot(df$experience)
 # A PRIORI WE HAVE NO OUTLIER VALUES, LET'S PROVE BUT LOOKING TO THE BOXPLOT WE CAN SEE THAT WE HAVE NO OUTLIERS FOR THIS VARIABLE.
@@ -244,10 +252,19 @@ In total, there are 6,140 blank entries, which will be handled or imputed during
 **VARIABLE 12 LAST_NEW_JOB**
 
 ```{r}
+
+# CAs que la tractem com a catergorica, altrament, numerica més abaix.
 table(df$last_new_job); prop.table(table(df$last_new_job))
 barplot(table(df$last_new_job))
 sum(is.na(df$last_new_job)); sum(df$last_new_job == "")
 df$last_new_job[which(df$last_new_job == "")] <- NA
+
+##### CAs que la tractem com a numerica.
+
+summary(df$last_new_job)
+Boxplot(df$last_new_job)
+hist(df$last_new_job, freq = FALSE)
+curve(dnorm(x,mean=mean(df$last_new_job), sd = sd(df$last_new_job)), lwd = 2, add = T, col = 'red')
 ```
 
 
@@ -395,8 +412,57 @@ res.cat$quanti
 ```
 
 
+# TRY TO DO THE FIRST MODELS
+
+```{r}
+m0 <- glm(target~1, family = binomial(), data = df)
+summary(m0)
+
+# IN THAT CASE WE HAVE THE INTERCEPT AS A VALUE -> -1.1. linear predictor (WE USE THE LOGLIT LIM FUNCTION AS A LINK FUNCTION).
+lp <- coef(m0)[1]; lp
+prob <- exp(lp) / (1+exp(lp)); prob
+
+# AQUI TENIM UN VALUE OF 0.25 APROXIMADAMENT, UN VALOR GRAN.
+
+m1 <- glm(target~gender, family = binomial, data = df)
+summary(m1)
+lpMale <- coef(m1)[1] + coef(m1)[2]
+lpWomen <- coef(m1)[1]
+lpOther <- coef(m1)[1] + coef(m1)[4]
+lpNotAnswer <- coef(m1)[1] + coef(m1)[3]
+probMale <- exp(lpMale) / (1+exp(lpMale)); probMale # VALUE OF 0.2278
+probWomen <- exp(lpWomen) / (1+exp(lpWomen)); probWomen # VALUE OF 0.2278
+probOther <- exp(lpOther) / (1+exp(lpOther)); probOther # VALUE OF 0.2617
+probNotA <- exp(lpNotAnswer) / (1+exp(lpNotAnswer)); probNotA # VALUE OF 0.308
+anova(m0,m1, test = "Chisq") # HEM QUEDARIA AMB EL MILLOR QUE EN AQUEST CAS ES EL QUE TÉ MENYS DEVIANCE I P-VALUE ES MENOR QUE 0.05, LLAVORS EM QUEDO AMB EL GRAN. 
+
+
+```
 
 
 
+# PRIMER NOMÉS NUMERIQUES
 
+```{r}
+mdl0 <- glm(target~city_development_index, family = binomial(), data = df)
+summary(mdl0)
+
+mdl1 <- glm(target~city_development_index+experience, family = binomial, data = df)
+summary(mdl1)
+
+mdl2 <- glm(target~city_development_index+experience+training_hours, family = binomial, data = df)
+summary(mdl2)
+
+mdl3 <- glm(target~city_development_index+experience+training_hours+last_new_job, family = binomial, data = df)
+summary(mdl3)
+
+
+anova(mdl0, mdl1, test = "Chisq") # millor el model 1
+anova(mdl1, mdl2, test = "Chisq") # millor el model 2
+anova(mdl2, mdl3, test = "Chisq") # millor el model 2
+AIC(mdl2, mdl3)                   # millor el model 2
+# millor el model 2.
+```
+
+# SI ARA AFEGISSIM CATEGORIQUES
 
