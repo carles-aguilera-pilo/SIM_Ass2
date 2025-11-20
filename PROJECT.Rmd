@@ -2,12 +2,15 @@
 title: "Assignment 2"
 author: "Berta Torrents & Carles Aguilera"
 date: "2025-11-11"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
+editor_options:
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-rm(list = ls())
 ```
 
 
@@ -17,6 +20,16 @@ library(chemometrics)
 library(mice)
 library(car)
 library(FactoMineR)
+library(MASS)
+library(AER)
+library(effects)
+library(lmtest)
+library(DescTools)
+library(ResourceSelection)
+library(statmod)
+library(cvAUC)
+library(caret)
+library(ModelMetrics)
 rm(list=ls())
 ```
 
@@ -202,12 +215,6 @@ iqr <- var_out[5] - var_out[2]; iqr
 llmild <- which(df$experience < var_out[2] - 1.5*iqr | df$experience > var_out[5] + 1.5*iqr); length(llmild)
 llsev <- which(df$experience < var_out[2] - 3*iqr | df$experience > var_out[5] + 3*iqr); length(llsev)
 
-Boxplot(df$experience)
-abline(h = var_out[2] - 1.5*iqr, col = 'green')
-abline(h = var_out[5] + 1.5*iqr, col = 'red')
-abline(h = var_out[2] - 3*iqr, col = 'green')
-abline(h = var_out[5] + 3*iqr, col = 'red')
-
 hist(df$experience, freq = FALSE)
 curve(dnorm(x,mean=mean(df$experience), sd=sd(df$experience)), lwd = 2, add = T)
 
@@ -285,8 +292,8 @@ llsev <- which(df$training_hours < var_out[2] - 3*iqr | df$training_hours > var_
 
 Boxplot(df$training_hours)
 abline(h = var_out[2] - 1.5*iqr, col = 'green')
-abline(h = var_out[5] + 1.5*iqr, col = 'red')
-abline(h = var_out[2] - 3*iqr, col = 'green')
+abline(h = var_out[5] + 1.5*iqr, col = 'green')
+abline(h = var_out[2] - 3*iqr, col = 'red')
 abline(h = var_out[5] + 3*iqr, col = 'red')
 
 hist(df$training_hours, freq = FALSE)
@@ -410,9 +417,13 @@ res.cat <- catdes(df[,c(2:18)], num.var = 17)
 res.cat$quanti.var
 res.cat$quanti
 ```
+```{r}
+set.seed(12345)
+options(contrasts=c("contr.treatment","contr.treatment"))
+```
 
 
-# TRY TO DO THE FIRST MODELS
+# TRY TO DO THE FIRST MODELS, de proba
 
 ```{r}
 m0 <- glm(target~1, family = binomial(), data = df)
@@ -422,7 +433,7 @@ summary(m0)
 lp <- coef(m0)[1]; lp
 prob <- exp(lp) / (1+exp(lp)); prob
 
-# AQUI TENIM UN VALUE OF 0.25 APROXIMADAMENT, UN VALOR GRAN.
+# AQUI TENIM UN VALUE OF 0.25 APROXIMADAMENT, UN VALOR que estaria per sota del threshold s = 0.5.
 
 m1 <- glm(target~gender, family = binomial, data = df)
 summary(m1)
@@ -434,6 +445,7 @@ probMale <- exp(lpMale) / (1+exp(lpMale)); probMale # VALUE OF 0.2278
 probWomen <- exp(lpWomen) / (1+exp(lpWomen)); probWomen # VALUE OF 0.2278
 probOther <- exp(lpOther) / (1+exp(lpOther)); probOther # VALUE OF 0.2617
 probNotA <- exp(lpNotAnswer) / (1+exp(lpNotAnswer)); probNotA # VALUE OF 0.308
+
 anova(m0,m1, test = "Chisq") # HEM QUEDARIA AMB EL MILLOR QUE EN AQUEST CAS ES EL QUE TÉ MENYS DEVIANCE I P-VALUE ES MENOR QUE 0.05, LLAVORS EM QUEDO AMB EL GRAN. 
 
 
@@ -444,25 +456,106 @@ anova(m0,m1, test = "Chisq") # HEM QUEDARIA AMB EL MILLOR QUE EN AQUEST CAS ES E
 # PRIMER NOMÉS NUMERIQUES
 
 ```{r}
+m0 <- glm(target~1, family = binomial(), data = df)
+summary(m0)
+#----------------------------------------------------------------------------------------------------------------------------------------------------------#
+#                                                                                                                                                          #
+#----------------------------------------------------------------------------------------------------------------------------------------------------------#
+
 mdl0 <- glm(target~city_development_index, family = binomial(), data = df)
 summary(mdl0)
+residualPlots(mdl0)
+par(mfrow=c(2,2))
+marginalModelPlots(mdl0)
+# VEIEM QUE AMB EL MARGINAL MODEL PLOTS PODRIEM APLICAR UNA TRANSFORMACIÓ CUBICA.
 
-mdl1 <- glm(target~city_development_index+experience, family = binomial, data = df)
+mdl0v2 <- glm(target~poly(city_development_index,3), family = binomial(), data = df)
+summary(mdl0v2)
+residualPlots(mdl0v2)
+par(mfrow=c(2,2))
+marginalModelPlots(mdl0v2)
+anova(mdl0, mdl0v2, test = "Chisq") # És millor el model0v2.
+#----------------------------------------------------------------------------------------------------------------------------------------------------------#
+
+mdl1 <- glm(target~poly(city_development_index,3)+experience, family = binomial, data = df)
 summary(mdl1)
+residualPlots(mdl1)
+par(mfrow=c(2,2))
+marginalModelPlots(mdl1)
+anova(mdl0v2, mdl1, test = "Chisq") # Millor el mdl1.
 
-mdl2 <- glm(target~city_development_index+experience+training_hours, family = binomial, data = df)
+
+mdl1v2 <- glm(target~poly(city_development_index,3)+poly(experience,2), family = binomial, data = df)
+summary(mdl1v2)
+residualPlots(mdl1v2)
+par(mfrow=c(2,2))
+marginalModelPlots(mdl1v2)
+anova(mdl1, mdl1v2, test = "Chisq") # es millor mdl1v2
+
+#----------------------------------------------------------------------------------------------------------------------------------------------------------#
+
+mdl2 <- glm(target~poly(city_development_index,3)+poly(experience,2)+training_hours, family = binomial, data = df)
 summary(mdl2)
+residualPlots(mdl2)
+marginalModelPlots(mdl2) # training hours, veiem com s'ajusta molt bé, per tant, no cal aplicar cap mena de transformació, com si hem fet amb les altres.
+anova(mdl1v2, mdl2, test = "Chisq")
+# Es millor el model 2, és a dir, es millor mdl2.
 
-mdl3 <- glm(target~city_development_index+experience+training_hours+last_new_job, family = binomial, data = df)
+#----------------------------------------------------------------------------------------------------------------------------------------------------------#
+
+mdl3 <- glm(target~poly(city_development_index,3)+poly(experience,2)+training_hours+last_new_job, family = binomial, data = df)
 summary(mdl3)
+# AQUI VEIEM QUE NO ES GAIRE SIGNIFICATIVA LAST_NEW_JOB, TENIM EL P-VALUE > 0.05, PER TANT, ES INSIGNIFICANT AQUESTA VARIABLE.
+residualPlots(mdl3)
+marginalModelPlots(mdl3)
+anova(mdl2, mdl3, test = "Chisq") # A més veiem com en aquest cas, es millor el model simple, es a dir el curt senser last_new_job.
+#----------------------------------------------------------------------------------------------------------------------------------------------------------#
 
-
-anova(mdl0, mdl1, test = "Chisq") # millor el model 1
-anova(mdl1, mdl2, test = "Chisq") # millor el model 2
-anova(mdl2, mdl3, test = "Chisq") # millor el model 2
-AIC(mdl2, mdl3)                   # millor el model 2
-# millor el model 2.
+# De totes les variables numeriques podem dir que el millor model numeric que tenim es el mdl2.
+"glm(target~poly(city_development_index,3)+poly(experience,2)+training_hours, family = binomial, data = df)"
 ```
 
-# SI ARA AFEGISSIM CATEGORIQUES
+# NUMERIC OR CATEGORIC ?
+
+```{r}
+# TENIM LES VARIABLES EXPERIENCE & TRAINING_HOUYRS FACTORITZADES/DISCREETITZADES, ANEM A FER UNAS PROBA I ES VEURE SI REALMENT S'ESTIMA MILLOR EL MODEL USANT AQUESTES VARIABLES COM A NUMERIQUES O COM A CATEGORIQUES (FENT ÚS DE LES DISCRETITZADES).
+
+m0 <- glm(target~f.city_development_index+f.experience+f.training_hours, family = binomial, data = df)
+summary(m0)
+residualPlots(m0)
+marginalModelPlots(m0)
+AIC(mdl2, m0)
+# Es millor usar-les com a numeriques, ja que obtenim un valor millor de AIC.
+
+# VEIEM COM EN AQUEST CAS LA VARIABLE TRAINING_HOURS DISCRETITZADA NO ES SINGIFICATIVA, LLAVORS ANEM A PROVAR AMB EL MODEL NOMES DISCRETITZANT LA VARIABLE EXPEIRENCE
+
+m0v2 <- glm(target~poly(city_development_index,3)+f.experience+training_hours, family = binomial, data = df)
+summary(m0v2)
+residualPlots(m0v2)
+marginalModelPlots(m0v2)
+AIC(mdl2, mdl0v2)
+
+# Llavors veiem com de cap de les maneres es millor la categorica, el millor model l'obtenim agafant aquestes variables experience and training hours com a numeriques.
+
+```
+
+# INTRODUCE THE CATEGORIC.
+
+```{r}
+md1 <- glm(target~poly(city_development_index,3)+poly(experience,2)+training_hours * (gender+relevent_experience+enrolled_university+major_discipline+education_level+company_size+company_type), family = binomial, data = df)
+summary(md1)
+residualPlots(md1)
+marginalModelPlots(md1)
+
+step1 <- step(md1)
+
+md2 <- glm(target ~ poly(city_development_index, 3) + poly(experience, 2) + training_hours + relevent_experience + enrolled_university + education_level + company_size + company_type, family = binomial(), data = df)
+anova(md1, md2, test = "Chisq")
+# VEIEM COM P-VALUE > 0.05, PER TANT, SERIEN EQUIVALENTS, ENS QUEDARIEM AMB EL MODEL QUE NO TE INTERACCIONS
+summary(md2)
+residualPlots(md2)
+marginalModelPlots(md2)
+
+AIC(md2, mdl2)
+```
 
