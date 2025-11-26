@@ -26,6 +26,7 @@ PREGUNTES LIDIA:
 - Company size te sentit passar-la a numèrica? O no perque els intervals són molt grans??
 - COmpany size i company type tenen un 30% de missignes. És millor posar-ho com a unknown category? No crec que tingui sentit imputar.
 - Té sentit tractar last new job com a numerica? Al contrari que experience, té pocs levels.
+- Com mirar si la imputacio de cate esta ben feta
 
 
 # Data preparation
@@ -332,13 +333,14 @@ df$f.experience_grouped <- factor(df$f.experience_grouped,
 levels = c("Very Low", "Low-Medium", "Medium", "High", "Very High"), ordered = TRUE)
 
 summary(df$f.experience_grouped)
+prop.table(table(df$f.experience_grouped))
 ```
 
 This variable is clearly a numeric feature that has been converted into categories. Therefore, it makes sense to redefine it in its numerical form to assess whether treating it as a continuous variable improves the model. Note that observations originally labeled as "<1" have been assigned the value 0.05, since assigning them a value of 0 could lead to future issues (for example, when applying transformations such as logarithms). Conversely, observations with ">20" years of experience have been set to 25, as this value reasonably represents the upper bound of that category.
 
 ```{r}
 df$experience[which(df$experience==">20")] <- 25
-df$experience[which(df$experience == "<1")] <- 0.5
+df$experience[which(df$experience == "<1")] <- 0.05
 df$experience <-  as.numeric(df$experience)
 
 summary(df$experience)
@@ -430,7 +432,7 @@ This variable is clearly a numeric feature that has been converted into categori
 
 ```{r}
 df$last_new_job[which(df$last_new_job==">4")] <- 5
-df$last_new_job[which(df$last_new_job == "never")] <- 0.5
+df$last_new_job[which(df$last_new_job == "never")] <- 0.05
 df$last_new_job <-  as.numeric(df$last_new_job)
 
 summary(df$last_new_job)
@@ -469,7 +471,6 @@ hist(log(df$training_hours), freq = FALSE)
 curve(dnorm(x, mean = mean(log(df$training_hours)), sd=sd(log(df$training_hours))), lwd = 2, add = T, col = "red")
 
 ks.test(log(df$training_hours), "pnorm", mean = mean(log(df$training_hours)), sd = sd(log(df$training_hours)))
-
 ad.test(log(df$training_hours))
 ```
 
@@ -681,7 +682,7 @@ res.mout <- Moutlier(df_numeric,quantile=0.95, plot = F)
 plot(res.mout$md,res.mout$rd,col="cyan",pch=19)
 abline(h=res.mout$cutoff,col="red",lwd=2)
 abline(v=res.mout$cutoff,col="red",lwd=2)
-text(res.mout$md,res.mout$rd,label=row.names(df_model),cex=0.5)
+text(res.mout$md,res.mout$rd,label=row.names(df),cex=0.5)
 ```
 
 There are some extreme multivariate outliers in the dataset that could negatively affect the model estimates and predictions. These outliers represent observations with unusual combinations of predictor values that do not conform to the general pattern of the data. Rather than removing them outright, we will flag these observations by creating a binary variable called isOutlier.
