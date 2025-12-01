@@ -19,8 +19,7 @@ knitr::opts_chunk$set(
 )
 ````
 
-<<<<<<< HEAD
-=======
+
 PREGUNTES LIDIA:
 - Com mirem els duplicates??
 - Ajuntem unknown i other en la variable gender? Other te moltes poques observacions
@@ -29,8 +28,6 @@ PREGUNTES LIDIA:
 - COmpany size i company type tenen un 30% de missignes. És millor posar-ho com a unknown category? No crec que tingui sentit imputar.
 - Té sentit tractar last new job com a numerica? Al contrari que experience, té pocs levels.
 - Com mirar si la imputacio de cate esta ben feta
-
->>>>>>> 5e89bd7738944a926065a428c18c8fcdd898e599
 
 # Data preparation
 
