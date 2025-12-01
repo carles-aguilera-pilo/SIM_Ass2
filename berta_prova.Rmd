@@ -19,6 +19,18 @@ knitr::opts_chunk$set(
 )
 ````
 
+<<<<<<< HEAD
+=======
+PREGUNTES LIDIA:
+- Com mirem els duplicates??
+- Ajuntem unknown i other en la variable gender? Other te moltes poques observacions
+- Major discipline te un 14.6% de missigness. Està al limbo. És millor imputar o state as unknown?
+- Company size te sentit passar-la a numèrica? O no perque els intervals són molt grans??
+- COmpany size i company type tenen un 30% de missignes. És millor posar-ho com a unknown category? No crec que tingui sentit imputar.
+- Té sentit tractar last new job com a numerica? Al contrari que experience, té pocs levels.
+- Com mirar si la imputacio de cate esta ben feta
+
+>>>>>>> 5e89bd7738944a926065a428c18c8fcdd898e599
 
 # Data preparation
 
@@ -303,6 +315,27 @@ The proportion of individuals with relevant experience is very low at the extrem
 prop.table(table(df$relevent_experience, df$f.experience))
 ```
 
+<<<<<<< HEAD
+=======
+Taking into account that the purpose of the project is to develop a linear regression model, it might be advisable to group the experience variable into broader categories. A possible grouping would define very low experience as "<1"-"2" years, low to medium experience as "3"-"6" years, medium experience as "7"-"10" years, high experience as "11"-"20" years, and very high experience as ">20" years. With this approach, we will reduce sparsity in extreme levels and achieve a more balanced distribution. This grouping would also help stabilize estimates and make the model more interpretable.
+
+```{r}
+df$f.experience_grouped <- fct_collapse(df$experience,
+"Very Low" = c("<1", "1", "2"),
+"Low-Medium" = c("3", "4", "5", "6"),
+"Medium" = c("7", "8", "9", "10"),
+"High" = c("11","12","13","14","15","16","17","18","19","20"),
+"Very High" = c(">20")
+)
+
+df$f.experience_grouped <- factor(df$f.experience_grouped,
+levels = c("Very Low", "Low-Medium", "Medium", "High", "Very High"), ordered = TRUE)
+
+summary(df$f.experience_grouped)
+prop.table(table(df$f.experience_grouped))
+```
+
+>>>>>>> 5e89bd7738944a926065a428c18c8fcdd898e599
 This variable is clearly a numeric feature that has been converted into categories. Therefore, it makes sense to redefine it in its numerical form to assess whether treating it as a continuous variable improves the model. Note that observations originally labeled as "<1" have been assigned the value 0.05, since assigning them a value of 0 could lead to future issues (for example, when applying transformations such as logarithms). Conversely, observations with ">20" years of experience have been set to 25, as this value reasonably represents the upper bound of that category.
 
 ```{r}
@@ -383,7 +416,28 @@ class(df$last_new_job)
 
 x <- c("", "never", "1", "2", "3", "4", ">4")
 
+<<<<<<< HEAD
 df$last_new_job <- factor(df$last_new_job, levels = x, ordered = TRUE)
+=======
+df$f.last_new_job <- factor(df$last_new_job, levels = x, ordered = TRUE)
+
+summary(df$f.last_new_job)
+
+prop.table(table(df$f.last_new_job))
+barplot(table(df$f.last_new_job))
+
+sum(is.na(df$f.last_new_job)); sum(df$f.last_new_job == "");
+df$f.last_new_job[which(df$f.last_new_job == "")] <- NA
+df$f.last_new_job <- droplevels(df$f.last_new_job)
+```
+
+This variable is clearly a numeric feature that has been converted into categories. Therefore, it makes sense to redefine it in its numerical form to assess whether treating it as a continuous variable improves the model. Note that observations originally labeled as "never" have been assigned the value 0.05, since assigning them a value of 0 could lead to future issues (for example, when applying transformations such as logarithms). Conversely, observations with ">4" years since the last new job have been set to 5, as this value reasonably represents the upper bound of that category.
+
+```{r}
+df$last_new_job[which(df$last_new_job==">4")] <- 5
+df$last_new_job[which(df$last_new_job == "never")] <- 0.05
+df$last_new_job <-  as.numeric(df$last_new_job)
+>>>>>>> 5e89bd7738944a926065a428c18c8fcdd898e599
 
 summary(df$last_new_job)
 
