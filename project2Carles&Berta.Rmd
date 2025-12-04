@@ -472,7 +472,7 @@ df$last_new_job <- df_imp$last_new_job
 The histograms of the imputed and non-imputed observations of the experience variable show the same distribution. Moreover, the quantiles are identical, indicating that both graphical and numerical assessments are consistent. When examining the factorized version of the variable, it can be observed that the proportions are nearly equal for both imputed and original observations.
 
 ```{r}
-par(mfrow=c(1,2)) 
+par(mfrow=c(1,2))
 hist(df$experience)
 hist(df_imp$experience)
 
@@ -507,7 +507,6 @@ Training hours appear largely independent of the other variables, showing neglig
 ```{r}
 corr_mat <- cor(df_numeric)
 corrplot(corr_mat, method = "color", tl.col = "black", tl.srt = 45, addCoef.col = "black")
-
 plot(df_numeric)
 ```
 
@@ -519,7 +518,6 @@ Moutlier is a function designed to detect multivariate outliers in a dataset usi
 
 ```{r}
 res.mout <- Moutlier(df_numeric,quantile=0.95, plot = F)
-
 plot(res.mout$md,res.mout$rd,col="cyan",pch=19)
 abline(h=res.mout$cutoff,col="red",lwd=2)
 abline(v=res.mout$cutoff,col="red",lwd=2)
@@ -534,7 +532,7 @@ ll <- which( (res.mout$md>res.mout$cutoff) & (res.mout$rd>res.mout$cutoff)); len
 df$isMvOutlier <- 0
 df$isMvOutlier[ll] <- 1
 
-df$isOutlier <- as.factor(df$isOutlier)
+df$isMvOutlier <- as.factor(df$isMvOutlier)
 ```
 
 The catdes function from the FactoMineR package was applied to the binary multivariate variable to assess the behavior of multivariate outliers.
@@ -571,6 +569,7 @@ res.cat$category
 #res.cat$quanti.var
 res.cat$quanti
 res.cat$quali
+
 
 ```
 
@@ -678,6 +677,7 @@ residualPlots(mdl2)
 marginalModelPlots(mdl2) # training hours, veiem com s'ajusta molt bé, per tant, no cal aplicar cap mena de transformació, com si hem fet amb les altres.
 anova(mdl1v2, mdl2, test = "Chisq")
 # Es millor el model 2, és a dir, es millor mdl2.
+anova(mdl2, mdl1v2,mdl1,mdl0v2, test = "Chisq")
 
 #-----------------------------------------------------------------------------------------------------------------------------------#
 
@@ -693,21 +693,24 @@ stepnumeric <- step(mdl2)
 ```{r}
 # TENIM LES VARIABLES: City_dev_index, EXPERIENCE, TRAINING_HOUYRS & last_new_job FACTORITZADES/DISCREETITZADES, ANEM A FER UNAS PROBA I ES VEURE SI REALMENT S'ESTIMA MILLOR EL MODEL USANT AQUESTES VARIABLES COM A NUMERIQUES O COM A CATEGORIQUES (FENT ÚS DE LES DISCRETITZADES).
 
-m0 <- glm(target~f.city_development_index+f.experience+f.training_hours+last_new_job, family = binomial, data = df_train)
-m0v1 <- glm(target~f.city_development_index+f.experience_grouped+f.training_hours+last_new_job, family = binomial, data = df_train)
-summary(m0); summary(m0v1)
-residualPlots(m0); summary(m0)
-marginalModelPlots(m0); summary(m0v1)
+m0 <- glm(target~f.city_development_index+f.experience+f.training_hours, family = binomial, data = df_train)
+m0v1 <- glm(target~f.city_development_index+f.experience_grouped+f.training_hours, family = binomial, data = df_train)
+summary(m0)
+summary(m0v1)
+residualPlots(m0)
+marginalModelPlots(m0)
+residualPlots(m0v1)
+marginalModelPlots(m0v1)
 AIC(mdl2, m0, m0v1)
 # Es millor usar-les com a numeriques, ja que obtenim un valor millor de AIC.
 
-# VEIEM COM EN AQUEST CAS LA VARIABLE TRAINING_HOURS DISCRETITZADA NO ES SINGIFICATIVA, LLAVORS ANEM A PROVAR AMB EL MODEL NOMES DISCRETITZANT LA VARIABLE EXPEIRENCE
+# ANEM A PROVAR AMB EL MODEL NOMES DISCRETITZANT LA VARIABLE EXPEIRENCE I DESPRÉS LA VARIABLE TRAINING_HOURS
 
 m0v2 <- glm(target~poly(city_development_index,4)+f.experience_grouped+training_hours, family = binomial, data = df_train)
 summary(m0v2)
 residualPlots(m0v2)
 marginalModelPlots(m0v2)
-AIC(mdl2, mdl0v2)
+AIC(mdl2, m0v2)
 
 m0v3 <- glm(target~poly(city_development_index,4)+poly(experience,2)+f.training_hours, family = binomial, data = df_train)
 summary(m0v3)
@@ -731,7 +734,7 @@ step1 <- step(md1)
 
 md2 <- glm(target ~ poly(city_development_index, 4) + poly(experience, 2)+training_hours+gender+relevent_experience+enrolled_university+education_level+ company_size + company_type, family = binomial(), data = df_train)
 anova(md1, md2, test = "Chisq")
-# VEIEM COM P-VALUE > 0.05, PER TANT, SERIEN EQUIVALENTS, ENS QUEDARIEM AMB EL MODEL SIMPLE.
+# VEIEM COM P-VALUE > 0.05, PER TANT, SERIEN EQUIVALENTS, ENS QUEDARIEM AMB EL MODEL SIMPLE, AQUEST MD2.
 summary(md2)
 residualPlots(md2)
 marginalModelPlots(md2)
@@ -749,7 +752,7 @@ marginalModelPlots(model1)
 
 step_int <- step(model1)
 
-mdl_f <- glm(target ~ poly(city_development_index, 4)*(relevent_experience+enrolled_university+education_level+company_size+company_type) + poly(experience, 2) * education_level +training_hours +gender +company_size + company_type, family=binomial(), data=df_train)
+mdl_f <- glm(target ~ poly(city_development_index, 4) * (relevent_experience +enrolled_university +education_level +company_size + company_type) + poly(experience, 2) * relevent_experience +training_hours + gender, family=binomial(), data=df_train)
 
 summary(mdl_f)
 residualPlots(mdl_f)
@@ -781,11 +784,29 @@ idx_eliminarv2 <- which(res_dist > 0.5); length(idx_eliminarv2)
 influencePlot(mdl_f)
 influenceIndexPlot(mdl_f)
 
-# WE CAN ALSO DELETE -> 15320, 16177 (CONSIDERAR AQUESTS).
+# WE CAN ALSO DELETE -> 9951, 16177, 978 (CONSIDERAR AQUESTS).
 
 df_train <- df_train[-c(idx_eliminar, idx_eliminarv2),]
 ```
 
+
+Once we have identified and estimated the best model, and after removing the most influential observations, we proceed to carry out the final validation phase. In this step, we evaluate how well the model is able to predict using the test dataset that we previously set aside.
+
+# FIRST WITH THE TRAIN DATASET AS SEEN IN LAB
+
+```{r}
+prob.tst <- predict(mdl_f, newdata = df_train, type = "response")
+pred.cls <- ifelse(prob.tst <=0.5, 0,1)
+table(Predicted = pred.cls, Actual = df_train$target)
+hoslem.test(df_train$target, prob.tst, g = 5)
+
+# ROC CURVE.
+roc_obj <- roc(df_train$target, prob.tst)
+auc(roc_obj)
+plot(roc_obj)
+```
+
+# WITH THE SECOND PART THAT IS THE TEST PART.
 
 ```{r}
 prob_test <- predict(mdl_f, newdata = df_test, type = "response")
@@ -804,6 +825,7 @@ recall    <- sum(pred_class == 1 & df_test$target == 1) / sum(df_test$target == 
 roc_obj <- roc(df_test$target, prob_test)
 auc(roc_obj)
 plot(roc_obj)
+PseudoR2(mdl_f, 'all') # We have the McFadden that is a value of -> 0.209.
 ```
 
 
@@ -815,5 +837,5 @@ plot(roc_obj)
  
 
 ```{r}
-hoslem.test(df_test$target, pred_class)
+hoslem.test(df_test$target, prob_test, g = 5)
 ```
