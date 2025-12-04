@@ -711,7 +711,7 @@ df_train <- df_train[-c(idx_eliminar, idx_eliminarv2),]
 ```{r}
 prob_test <- predict(mdl_f, newdata = df_test, type = "response")
 threshold <- 0.5
-pred_class <- ifelse(prob_test >= threshold, 1, 0)
+pred_class <- ifelse(prob_test >= threshold, 1, 0); pred_class
 table(Predicted = pred_class, Actual = df_test$target)
 
 ```
@@ -737,6 +737,7 @@ plot(roc_obj)
  
 
 ```{r}
-hoslem.test(df_train$target, fitted(mdl_f))
+df_test$target <- as.numeric(as.character(df_test$target))
+hoslem.test(df_test$target, prob_test, g = 5)
 ```
 
