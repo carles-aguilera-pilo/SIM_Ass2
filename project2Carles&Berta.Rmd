@@ -639,6 +639,14 @@ m0$deviance
 
 ### Modelling with numerical variables
 
+Below is the full process used to model and evaluate logistic regression models, focusing exclusively on numerical variables.
+
+Once the different models were generated, we tested them one by one, examining both the summary output, to assess the significance of the variables, and the residualPlots and MarginalModelPlots. The goal of this stage was to determine, for each model, which transformations could improve the behaviour of the numerical variables and to identify the best possible model based solely on them.
+
+From all the models we created, we also applied ANOVA (for nested model comparisons) and AIC (for non-nested comparisons) to determine which numeric model performed best.
+
+Ultimately, we found that the best-performing numeric model is the one that applies a fourth-degree polynomial transformation to city_development_index, a second-degree polynomial transformation to experience, and leaves training_hours untransformed. The use of the step function further confirms that this is indeed the optimal numeric model among the alternatives considered.
+
 ```{r}
 mdl0 <- glm(target~city_development_index, family = binomial(), data = df_train)
 summary(mdl0)
@@ -691,6 +699,12 @@ stepnumeric <- step(mdl2)
 
 ### Numerical or categorical?
 
+In this section, we evaluate the best way to incorporate our variables into the model, considering both their numerical and categorical representations. Specifically, we examine the variables city_development_index, training_hours, and experience in different formats: as numerical variables, as categorical variables, and in grouped forms.
+
+To determine which representation is most suitable, we compare the best-performing model built using these variables in numerical form with the best-performing model where the same variables are treated as factors. This allows us to assess whether it is preferable to use them as continuous variables or as categorical ones.
+
+After completing the comparison and validation process, we conclude that the numerical representation of these variables provides the best model performance.
+
 ```{r}
 # TENIM LES VARIABLES: City_dev_index, EXPERIENCE, TRAINING_HOUYRS & last_new_job FACTORITZADES/DISCREETITZADES, ANEM A FER UNAS PROBA I ES VEURE SI REALMENT S'ESTIMA MILLOR EL MODEL USANT AQUESTES VARIABLES COM A NUMERIQUES O COM A CATEGORIQUES (FENT ÚS DE LES DISCRETITZADES).
 
@@ -725,6 +739,10 @@ AIC(mdl2, m0v3, m0v2)
 
 ### Introduce main effects of categorical variables
 
+In this section, we introduce the categorical variables. We start from the best numerical model and verify whether, for the variables included in that model, it is more appropriate to use their numerical form or their categorical alternatives. After confirming that the numerical representation is indeed the most suitable, we proceed to include the remaining categorical variables.
+
+After applying step, we obtain the best model that incorporates categorical variables, which we further validate using both AIC and ANOVA. Therefore, in this section, we identify the optimal model that combines numerical and categorical variables, still without interactions, these will be addressed in the next section.
+
 ```{r}
 md1 <- glm(target~poly(city_development_index,4)+poly(experience,2)+training_hours+gender+relevent_experience+enrolled_university+major_discipline+education_level+company_size+company_type, family = binomial, data = df_train)
 summary(md1)
@@ -744,6 +762,9 @@ AIC(md2, mdl2, md1)
 
 
 ### Introduce interactions
+In this section, we consider all possible interactions between the variables. After constructing a fairly complex model that includes every potential interaction, we apply the step function. This allows us to automatically remove irrelevant variables and interactions, retaining only those that are statistically meaningful.
+
+Once step has been applied to the full model containing all variables and their interactions, we obtain mdl_f, which represents the best final model we have estimated. With this final model selected, the next step is to carry out the validation process to assess how well the model fits the data and how balanced its predictions are.
 
 ```{r}
 model1 <- glm(target ~ (poly(city_development_index, 4) + poly(experience, 2) + training_hours) *(gender+relevent_experience+enrolled_university+education_level+company_size+company_type), family = binomial(), data = df_train)
@@ -791,7 +812,7 @@ df_train <- df_train[-c(idx_eliminar, idx_eliminarv2),]
 ```
 
 
-Once we have identified and estimated the best model, and after removing the most influential observations, we proceed to carry out the final validation phase. In this step, we evaluate how well the model is able to predict using the test dataset that we previously set aside.
+Once we have identified and estimated the best model, and after removing the most influential observations, we proceed to carry out the final validation phase. In this step, we evaluate how well the model is able to predict using the test dataset that we previously set aside, and also the train dataset that we have used to model.
 
 # FIRST WITH THE TRAIN DATASET AS SEEN IN LAB
 
@@ -800,6 +821,7 @@ prob.tst <- predict(mdl_f, newdata = df_train, type = "response")
 pred.cls <- ifelse(prob.tst <=0.40, 0,1)
 table(Predicted = pred.cls, Actual = df_train$target)
 hoslem.test(df_train$target, prob.tst, g = 5)
+BrierScore(df_train$target, prob.tst)
 
 # ROC CURVE.
 roc_obj <- roc(df_train$target, prob.tst)
