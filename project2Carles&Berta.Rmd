@@ -29,6 +29,7 @@ rm(list=ls())
 # Libraries
 library(readr)
 library(pROC)
+library("ROCR")
 library(ResourceSelection)
 library(chemometrics)
 library(mice)
@@ -796,24 +797,28 @@ Once we have identified and estimated the best model, and after removing the mos
 
 ```{r}
 prob.tst <- predict(mdl_f, newdata = df_train, type = "response")
-pred.cls <- ifelse(prob.tst <=0.5, 0,1)
+pred.cls <- ifelse(prob.tst <=0.40, 0,1)
 table(Predicted = pred.cls, Actual = df_train$target)
 hoslem.test(df_train$target, prob.tst, g = 5)
 
 # ROC CURVE.
 roc_obj <- roc(df_train$target, prob.tst)
-auc(roc_obj)
+coords(roc_obj, "best", best.method = "closest.topleft")
+AUC(prob.tst,df_train$target)
 plot(roc_obj)
+
+dadesroc<-prediction(predict(mdl_f,type="response"), df_train$target)
+par(mfrow=c(1,2))
+plot(performance(dadesroc,"err"))
+plot(performance(dadesroc,"tpr","fpr"))
 ```
 
 # WITH THE SECOND PART THAT IS THE TEST PART.
 
 ```{r}
 prob_test <- predict(mdl_f, newdata = df_test, type = "response")
-threshold <- 0.5
-pred_class <- ifelse(prob_test > threshold, 1, 0)
+pred_class <- ifelse(prob_test > 0.40, 1, 0)
 table(Predicted = pred_class, Actual = df_test$target)
-
 ```
 
 # COMPUTE THE VALUES WITH ROC CURVE.
@@ -823,19 +828,27 @@ accuracy  <- mean(pred_class == df_test$target); accuracy
 precision <- sum(pred_class == 1 & df_test$target == 1) / sum(pred_class == 1); precision
 recall    <- sum(pred_class == 1 & df_test$target == 1) / sum(df_test$target == 1); recall
 roc_obj <- roc(df_test$target, prob_test)
-auc(roc_obj)
+AUC(prob_test, df_test$target)
 plot(roc_obj)
 PseudoR2(mdl_f, 'all') # We have the McFadden that is a value of -> 0.209.
 ```
 
 
-
 # holsem.test because we're working with disaggregated data.
- FOR THE CALCULATION OF THE GODNESS OF FIT (GoF), BEING THE HYPTESIS TEST LIJKE THIS
+FOR THE CALCULATION OF THE GODNESS OF FIT (GoF), BEING THE HYPTESIS TEST LIJKE THIS
  H0: THE MODELS FITS CORRECTLY IN THE DATA, THEY'RE ALIGNED
  H1: THEY ARE NOT ALIGNED, THE MODELS DOESN'T FITTS CORRECTLY TO THE DATA.
  
+ 
+Although the Hosmer–Lemeshow test is commonly used to assess model calibration, it tends to systematically reject the null hypothesis in large samples, even when the model is reasonably well calibrated. In our case, despite using a train/test split, we still work with a substantial number of observations (15,323 in the training set and 3,832 in the test set), which limits the usefulness of this test.
+
+For this reason, we rely on a more stable alternative: the Brier Score. This metric evaluates global calibration by comparing the predicted probabilities with the actual outcomes:
+
+ $$\text{Brier Score} \;=\; \frac{1}{N} \sum_{i=1}^{N} (p_i - y_i)^2$$
+ 
+Unlike the Hosmer–Lemeshow test, the Brier Score is robust to large sample sizes and provides a direct assessment of predictive probability accuracy. In our case, the Brier Score is 0.14, which is generally considered indicative of good calibration (values below 0.18 are usually good, while values above 0.25 suggest poor calibration). This confirms that, in addition to having good discrimination (AUC), our model also produces reliable probability estimates.
 
 ```{r}
 hoslem.test(df_test$target, prob_test, g = 5)
+BrierScore(df_test$target, prob_test)
 ```
