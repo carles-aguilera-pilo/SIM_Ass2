@@ -852,3 +852,8 @@ Unlike the Hosmer–Lemeshow test, the Brier Score is robust to large sample siz
 hoslem.test(df_test$target, prob_test, g = 5)
 BrierScore(df_test$target, prob_test)
 ```
+
+## References
+
+[1] Brier Score — Wikipedia.  
+https://en.wikipedia.org/wiki/Brier_score
