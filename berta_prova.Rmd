@@ -1,0 +1,799 @@
+---
+title: "Assignment 1"
+author: "Berta Torrents & Carles Aguilera"
+date: "December 2025"
+output:
+  word_document: default
+  pdf_document:
+    latex_engine: xelatex
+geometry: margin=1in
+---
+````{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  results = 'markup',
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 7,
+  fig.height = 5
+)
+````
+
+
+PREGUNTES LIDIA:
+- Com mirem els duplicates??
+- Ajuntem unknown i other en la variable gender? Other te moltes poques observacions
+- Major discipline te un 14.6% de missigness. Està al limbo. És millor imputar o state as unknown?
+- Company size te sentit passar-la a numèrica? O no perque els intervals són molt grans??
+- COmpany size i company type tenen un 30% de missignes. És millor posar-ho com a unknown category? No crec que tingui sentit imputar.
+- Té sentit tractar last new job com a numerica? Al contrari que experience, té pocs levels.
+- Com mirar si la imputacio de cate esta ben feta
+
+# Data preparation
+
+First, we clear the past plots and clean the workspace. We also load the libraries.
+
+```{r}
+set.seed(123)
+
+# Clear plots
+if(!is.null(dev.list())) dev.off()
+
+# Clean workspace
+rm(list=ls())
+
+# Libraries
+library(mice)
+library(forcats)
+library(nortest)
+library(chemometrics)
+library(corrplot)
+library(FactoMineR)
+library(car)
+library(MASS)
+library(effects)
+library(naniar)
+```
+
+Then we read the data from the csv. The data frame initially has 19158 observations.
+
+```{r}
+# Read data
+df <- read.csv('aug_train.csv', header = T)
+nrow(df)
+
+summary(df)
+```
+
+# Data preparation
+
+We will first do an exploratory data analysis of the data frame variables. In this analysis, we will first check the data types and fix structural errors and we will count the number of missing values, errors and outliers.
+
+## Variables study
+
+### enrollee_id
+
+The enrollee_id variable was stored as an integer. Since it corresponds to the unique id identifier, it should be converted into a factor. As it was expected, the id variable does not contain any missing values and it has 19158 unique values (one for each observation).
+
+Note that this variable serves as a unique identifier for each individual or observation, but does not provide any analytical or predictive information about the candidates themselves.
+
+```{r}
+class(df$enrollee_id)
+
+df$enrollee_id <- as.factor(df$enrollee_id)
+
+summary(df$enrollee_id)
+
+sum(is.na(df$enrollee_id))
+
+length(unique(df$enrollee_id))
+```
+
+### city
+
+The city variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. 
+
+We can observe that the three cities with the highest number of candidates are:
+  - city_103 --> 4.355 candidates
+  - city_21 --> 2.702 candidates
+  - city_16 --> 1.533 candidates
+
+On the other hand, the cities with the lowest representation are:
+  - city_140 --> 1 candidate
+  - city_171 --> 1 candidate
+  - city_111 --> 3 candidates (same as city_121 and city_129).
+
+This variable does not contain missing values nor blank values. Moreover, this data frame contains 123 different city values.
+
+Since city captures meaningful geographic variation that can influence is a person is looking for a job change, this variable might be useful to describe or predict the target variable. However, this variable has too many different levels, which makes it less suitable for the specific case of linear regression model.
+
+```{r}
+class(df$city)
+
+df$city <- as.factor(df$city)
+
+sort(table(df$city))
+
+sum(is.na(df$city))
+
+length(unique(df$city))
+```
+
+### city_development_index
+
+The city_development_index was stored as a numeric variable ranging from 0.448 to 0.949. Since the median (0.9030) and mean (0.8288) are far from the minimum value, it seems like this variable will contain some outliers.
+
+It does not contain any missing values.
+
+```{r}
+class(df$city_development_index)
+
+summary(df$city_development_index)
+
+sum(is.na(df$city_development_index)); sum(df$city_development_index == "")
+```
+
+The distribution is extremely right-skewed. The histogram shows that almost all observations are concentrated around a single very high value (around 0.9), with only a few spread across lower values. Most cities have a high city development index. In fact, even after applying a logarithmic transformation, it cannot be properly normalized.
+
+```{r}
+hist(df$city_development_index, freq = FALSE)
+curve(dnorm(x, mean = mean(df$city_development_index), sd=sd(df$city_development_index)), lwd = 2, add = T, col = "red")
+
+hist(log(df$city_development_index), freq = FALSE)
+curve(dnorm(x, mean = mean(log(df$city_development_index)), sd=sd(log(df$city_development_index))), lwd = 2, add = T, col = "red")
+```
+
+As it was expected, the boxplot confirms that there are some lower outlier. 
+
+To formally identify outliers, we used the Interquartile Range (IQR) method. As we learned in class, the IQR is calculated as the difference between the third quartile (Q3) and the first quartile (Q1), representing the spread of the middle 50% of the data. Using this measure, two sets of thresholds were computed: mild outliers (values beyond 1.5×IQR from Q1 or Q3) and severe outliers (values beyond 3×IQR from Q1 or Q3). Any value outside these limits is considered an outlier.
+
+It seems like this variable has 17 univariate mild outliers and 0 univariate severe outliers, all of which belong to the same city (city_33). The vast majority of the candidates from city_33 do not have relevant experience. Similarly, the major_discipline variable shows that the vast majority of them are from STEM field. It is also noticeable that most of them hold a graduate degree.
+
+```{r}
+Boxplot(df$city_development_index)
+
+var_out <- summary(df$city_development_index)
+iqr <- var_out[5] - var_out[2]
+
+llmild <- which((df$training_hours < var_out[2] - 1.5*iqr & df$training_hours > var_out[2] - 3*iqr) | (df$training_hours > var_out[5] + 1.5*iqr & df$training_hours < var_out[5] + 3*iqr)); length(llmild)
+llsev <- which(df$training_hours < var_out[2] - 3*iqr | df$training_hours > var_out[5] + 3*iqr); length(llsev)
+
+Boxplot(df$city_development_index)
+abline(h = var_out[2] - 1.5*iqr, col = 'green')
+abline(h = var_out[5] + 1.5*iqr, col = 'green')
+abline(h = var_out[2] - 3*iqr, col = 'red')
+abline(h = var_out[5] + 3*iqr, col = 'red')
+
+df[llmild,]
+```
+
+
+### gender
+
+The gender variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has three levels: Male, Female and Other.
+
+It is important to note that 4508 observations (in other words, a 23.5% of the observations) of this variable are blank observations. Such blank entries are not unusual in gender-related variables, since many surveys do not require respondents to provide this information. For this reason, it does not make sense to treat these blanks as missing values to be imputed. Instead, it is more reasonable to create a new category, "Unknown", to group these observations. Therefore, it also makes sense to group the Other and Unknown categories, since both provide very limited information.
+
+Another evident issue with this variable is that it is highly unbalanced. Only 6% of the observations correspond to the female level, whereas 69% correspond to the male level. This imbalance can be clearly seen both graphically, using a barplot, and statistically, using the prop.table() function, which confirm this finding.
+
+```{r}
+class(df$gender)
+
+df$gender[which(df$gender == "" | is.na(df$gender))] <- "Unknown"
+df$gender[df$gender %in% c("Other", "Unknown")] <- "Other/Unknown"
+
+df$gender <- as.factor(df$gender)
+
+summary(df$gender)
+
+prop.table(table(df$gender))
+barplot(table(df$gender))
+```
+
+### relevent_experience
+
+The relevent_experience variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has two levels: Has relevent experience and No relevent experience.
+
+This variable contains no missing or blank values, which indicates good data quality for this feature.
+
+Note that this variable is also highly unbalanced. Only 28% of the observations correspond to the non relevent experience level, whereas almost 72% correspond to the has relevent experience level. Hence, the vast majority of individuals in the dataset have relevant experience.
+
+```{r}
+class(df$relevent_experience)
+
+df$relevent_experience <- as.factor(df$relevent_experience)
+
+summary(df$relevent_experience)
+
+prop.table(table(df$relevent_experience))
+barplot(table(df$relevent_experience))
+
+sum(is.na(df$relevent_experience)); sum(df$relevent_experience == "");
+```
+
+### enrolled_university
+
+The enrolled_university variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has three levels: Full time course, No enrollment and Part time course.
+
+Note that 386 observations (in other words, a 2% of the observations) of this variable are missing. These blank observations have been set as missing values that should lately be taken into account.
+
+It is worth noting that this variable is highly unbalanced, with the majority of observations falling under the category no_enrollment. Specifically, 13817 individuals, representing approximately 72.12% of the sample, have enrolled_university = no_enrollment. Only 19.6% of the observations correspond to Full time course, and 6% correspond to Part time course.
+
+```{r}
+class(df$enrolled_university)
+
+df$enrolled_university <- as.factor(df$enrolled_university)
+
+summary(df$enrolled_university)
+
+prop.table(table(df$enrolled_university))
+
+barplot(table(df$enrolled_university))
+
+sum(is.na(df$enrolled_university)); sum(df$enrolled_university == "")
+df$enrolled_university[which(df$enrolled_university == "")] <- NA
+df$enrolled_university <- droplevels(df$enrolled_university)
+```
+
+### education_level
+
+The education_level variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has five levels: Graduate, High School, Masters, Phd and Primary School.
+
+Note that 460 observations (in other words, a 2.4% of the observations) of this variable are missing. These blank observations have been set as missing values that should lately be taken into account.
+
+Moreover, this variable is highly unbalanced. The vast majority of observations (60.5%) correspond to the Graduate level, followed by Masters at 22.7%. The High School and Primary School levels account for only 10.5% and 1.6% of the sample, respectively. This indicates that most of the individuals in the dataset have higher education, beyond the mandatory levels.
+
+```{r}
+class(df$education_level)
+
+df$education_level <- as.factor(df$education_level)
+
+summary(df$education_level)
+
+prop.table(table(df$education_level))
+barplot(table(df$education_level))
+
+sum(is.na(df$education_level)); sum(df$education_level == "");
+df$education_level[which(df$education_level == "")] <- NA
+df$education_level <- droplevels(df$education_level)
+```
+
+### major_discipline
+
+The major_discipline variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has six levels: Arts, Business Degree, Humanities, No Major, Other and STEM.
+
+It should be highlighted that 2813 observations (in other words, a 14.6% of the observations) of this variable are missing. These blank observations have been set as missing values that should lately be taken into account.
+
+It can be clearly seen that this variable is highly unbalanced. The dominant discipline is STEM, with a total of 14492 observations, representing approximately 75.64% of the dataset. This indicates that most candidates come from science, technology, engineering, or mathematics backgrounds. The remaining disciplines each account for only 1-3.5% of the population.
+
+```{r}
+class(df$major_discipline)
+
+df$major_discipline <- as.factor(df$major_discipline)
+
+summary(df$major_discipline)
+
+prop.table(table(df$major_discipline))
+barplot(table(df$major_discipline))
+
+sum(is.na(df$major_discipline)); sum(df$major_discipline == "");
+df$major_discipline[which(df$major_discipline == "")] <- NA
+df$major_discipline <- droplevels(df$major_discipline)
+```
+
+### experience
+
+The experience variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has 21 levels: <1, 1-19, >20.
+
+Note that 65 observations (in other words, a 0.3% of the observations) of this variable are missing. These blank observations have been set as missing values that should lately be taken into account.
+
+Moreover, this variable is highly unbalanced. The vast majority of observations (17.15%) correspond to people with more than 20 years of experience, as this category groups many experience levels together. Therefore, it might be a good idea to regroup this variable to achieve a more balanced distribution.
+
+```{r}
+class(df$experience)
+
+x <- c("", "<1", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", ">20")
+
+df$f.experience <- factor(df$experience, levels = x, ordered = TRUE)
+
+summary(df$f.experience)
+
+prop.table(table(df$f.experience))
+barplot(table(df$f.experience))
+
+sum(is.na(df$f.experience)); sum(df$f.experience == "");
+df$f.experience[which(df$f.experience == "")] <- NA
+df$f.experience <- droplevels(df$f.experience)
+```
+
+The proportion of individuals with relevant experience is very low at the extremes of the variable ("<1", "1" and "2" levels). Then, it increases sharply in the middle ranges (from "3" to "10" years). Finally, it gradually decreases for most higher experience levels. Interestingly, the ">20" category shows a spike in relevant experience, reflecting that individuals with upper extreme experience levels accumulate a large amount of relevant experience. This pattern indicates that the relationship between years of experience and relevant experience is non-linear.
+
+```{r}
+prop.table(table(df$relevent_experience, df$f.experience))
+```
+
+<<<<<<< HEAD
+=======
+Taking into account that the purpose of the project is to develop a linear regression model, it might be advisable to group the experience variable into broader categories. A possible grouping would define very low experience as "<1"-"2" years, low to medium experience as "3"-"6" years, medium experience as "7"-"10" years, high experience as "11"-"20" years, and very high experience as ">20" years. With this approach, we will reduce sparsity in extreme levels and achieve a more balanced distribution. This grouping would also help stabilize estimates and make the model more interpretable.
+
+```{r}
+df$f.experience_grouped <- fct_collapse(df$experience,
+"Very Low" = c("<1", "1", "2"),
+"Low-Medium" = c("3", "4", "5", "6"),
+"Medium" = c("7", "8", "9", "10"),
+"High" = c("11","12","13","14","15","16","17","18","19","20"),
+"Very High" = c(">20")
+)
+
+df$f.experience_grouped <- factor(df$f.experience_grouped,
+levels = c("Very Low", "Low-Medium", "Medium", "High", "Very High"), ordered = TRUE)
+
+summary(df$f.experience_grouped)
+prop.table(table(df$f.experience_grouped))
+```
+
+>>>>>>> 5e89bd7738944a926065a428c18c8fcdd898e599
+This variable is clearly a numeric feature that has been converted into categories. Therefore, it makes sense to redefine it in its numerical form to assess whether treating it as a continuous variable improves the model. Note that observations originally labeled as "<1" have been assigned the value 0.05, since assigning them a value of 0 could lead to future issues (for example, when applying transformations such as logarithms). Conversely, observations with ">20" years of experience have been set to 25, as this value reasonably represents the upper bound of that category.
+
+```{r}
+df$experience[which(df$experience==">20")] <- 25
+df$experience[which(df$experience == "<1")] <- 0.05
+df$experience <-  as.numeric(df$experience)
+
+summary(df$experience)
+```
+
+The distribution of the variable is discrete and left-skewed, with a clear spike at the value 25, reflecting the upper-censoring of the original ">20" category.
+
+Moreover, this variable does not show any outlier observation.
+
+```{r}
+hist(df$experience, freq = FALSE)
+Boxplot(df$experience)
+```
+
+### company_size
+
+The company_size variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has eight levels ranging from less than 10 employees to more than 10000.
+
+It should be highlighted that 5938 observations (in other words, a 31% of the observations) of this variable are missing. That is a serious data quality problem. Since imputing such a large proportion of missing values would be unreliable, it is more reasonable to group these blank observations into an "Unknown" category. Nonetheless, caution is needed when using this variable in modeling, as the high proportion of missing data may affect the interpretability and stability of any results.
+
+Nonetheless, this variable is slightly unbalanced. The category with the highest proportion is 100-500, representing 13.42% of the dataset. In contrast, the category 5000-9999 has the lowest proportion, accounting for only 3% of the observations.
+
+```{r}
+class(df$company_size)
+
+x <- c("", "<10", "10/49", "50-99", "100-500", "500-999", "1000-4999", "5000-9999", "10000+")
+
+df$company_size <- factor(df$company_size, levels = x, ordered = TRUE)
+
+levels(df$company_size) <- c(levels(df$company_size), "Unknown")
+df$company_size[df$company_size == ""] <- "Unknown"
+df$company_size <- droplevels(df$company_size)
+
+summary(df$company_size)
+
+prop.table(table(df$company_size))
+barplot(table(df$company_size))
+```
+
+### company_type
+
+The company_type variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has six levels: Early Stage Startup, Funded Startup, NGO, Other, Public Sector and Pvt Ltd.
+
+A clear data quality problem is shown for this variable, since 6140 observations (in other words, a 32% of the observations) of this variable are missing. Since imputing such a large proportion of missing values would be unreliable, it is more reasonable to group these blank observations into an "Unknown" category. Nonetheless, caution is needed when using this variable in modeling, as the high proportion of missing data may affect the interpretability and stability of any results.
+
+This variable is clearly highly unbalanced. In fact, more than half of the observations fall under the Pvt Ltd category, while the remaining company types each account for only 0.6-5% of the population. Therefore, it can be concluded that the majority of individuals in the dataset are employed in private limited companies.
+
+```{r}
+class(df$company_type)
+
+df$company_type <- as.factor(df$company_type)
+
+levels(df$company_type) <- c(levels(df$company_type), "Unknown")
+df$company_type[df$company_type == ""] <- "Unknown"
+df$company_type <- droplevels(df$company_type)
+
+summary(df$company_type)
+
+prop.table(table(df$company_type))
+barplot(table(df$company_type))
+```
+
+### last_new_job
+
+The last_new_job variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has six levels: never, 1-4 and >4.
+
+Note that 423 observations (in other words, a 2.2% of the observations) of this variable are missing. These blank observations have been set as missing values that should lately be taken into account.
+
+In addition, this variable is highly unbalanced. The most frequent value for the last_new_job feature is 1 year, representing approximately 42% of all observations. The least common values are 3 and 4 years, each accounting for only 5.3% of the observations. In other words, most people either change jobs after 1 year or remain in the same job for several years.
+
+```{r}
+class(df$last_new_job)
+
+x <- c("", "never", "1", "2", "3", "4", ">4")
+
+<<<<<<< HEAD
+df$last_new_job <- factor(df$last_new_job, levels = x, ordered = TRUE)
+=======
+df$f.last_new_job <- factor(df$last_new_job, levels = x, ordered = TRUE)
+
+summary(df$f.last_new_job)
+
+prop.table(table(df$f.last_new_job))
+barplot(table(df$f.last_new_job))
+
+sum(is.na(df$f.last_new_job)); sum(df$f.last_new_job == "");
+df$f.last_new_job[which(df$f.last_new_job == "")] <- NA
+df$f.last_new_job <- droplevels(df$f.last_new_job)
+```
+
+This variable is clearly a numeric feature that has been converted into categories. Therefore, it makes sense to redefine it in its numerical form to assess whether treating it as a continuous variable improves the model. Note that observations originally labeled as "never" have been assigned the value 0.05, since assigning them a value of 0 could lead to future issues (for example, when applying transformations such as logarithms). Conversely, observations with ">4" years since the last new job have been set to 5, as this value reasonably represents the upper bound of that category.
+
+```{r}
+df$last_new_job[which(df$last_new_job==">4")] <- 5
+df$last_new_job[which(df$last_new_job == "never")] <- 0.05
+df$last_new_job <-  as.numeric(df$last_new_job)
+>>>>>>> 5e89bd7738944a926065a428c18c8fcdd898e599
+
+summary(df$last_new_job)
+
+prop.table(table(df$last_new_job))
+barplot(table(df$last_new_job))
+
+sum(is.na(df$last_new_job)); sum(df$last_new_job == "");
+df$last_new_job[which(df$last_new_job == "")] <- NA
+df$last_new_job <- droplevels(df$last_new_job)
+```
+
+### training_hours
+
+The training_hours was stored as an integer variable ranging from 1 to 336. Since the median (47) and mean (65.37) are far from the maximum value, it seems like this variable will contain some outliers.
+
+It does not contain any missing values.
+
+```{r}
+class(df$training_hours)
+
+summary(df$training_hours)
+
+sum(is.na(df$training_hours)); sum(df$training_hours == "")
+```
+
+The distribution is extremely left-skewed. The histogram shows that almost all observations are ranged between 1 and 60 hours, in other words, most people do not follow many training hours. In fact, even after applying a logarithmic transformation, it cannot be properly normalized (null hypothesis of normality for the Kolmogorov-Smirnov and Anderson-Darling tests are rejected).
+
+```{r}
+hist(df$training_hours, freq = FALSE)
+curve(dnorm(x, mean = mean(df$training_hours), sd=sd(df$training_hours)), lwd = 2, add = T, col = "red")
+
+hist(log(df$training_hours), freq = FALSE)
+curve(dnorm(x, mean = mean(log(df$training_hours)), sd=sd(log(df$training_hours))), lwd = 2, add = T, col = "red")
+
+ks.test(log(df$training_hours), "pnorm", mean = mean(log(df$training_hours)), sd = sd(log(df$training_hours)))
+ad.test(log(df$training_hours))
+```
+
+As it was expected, the boxplot confirms that there are some upper outlier. 
+
+To formally identify outliers, we also used the Interquartile Range (IQR) method. It seems like this variable has 709 univariate mild outliers and 275 univariate severe outliers.
+
+```{r}
+Boxplot(df$training_hours)
+
+var_out <- summary(df$training_hours)
+iqr <- var_out[5] - var_out[2]
+
+llmild <- which((df$training_hours < var_out[2] - 1.5*iqr & df$training_hours > var_out[2] - 3*iqr) | (df$training_hours > var_out[5] + 1.5*iqr & df$training_hours < var_out[5] + 3*iqr)); length(llmild)
+llsev <- which(df$training_hours < var_out[2] - 3*iqr | df$training_hours > var_out[5] + 3*iqr); length(llsev)
+
+Boxplot(df$training_hours)
+abline(h = var_out[2] - 1.5*iqr, col = 'green')
+abline(h = var_out[5] + 1.5*iqr, col = 'green')
+abline(h = var_out[2] - 3*iqr, col = 'red')
+abline(h = var_out[5] + 3*iqr, col = 'red')
+
+df[llmild,]
+```
+
+
+### target
+
+The target variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This is a binary variable that indicates whether individuals are seeking a job change or not. Thus, this feature allows us to analyze the proportion of candidates currently looking for new employment opportunities.
+
+It is important to note that this variable has no missing values. This is crucial because the target variable cannot be imputed, so all its values must be present for the analysis.
+
+It is evident that this variable is highly unbalanced. The vast majority of observations (75%) indicate that individuals are not seeking a job change, whereas only 25% of the sample are looking for a new job.
+
+```{r}
+class(df$target)
+
+df$target <- as.factor(df$target)
+
+summary(df$target)
+
+prop.table(table(df$target))
+barplot(table(df$target))
+
+sum(is.na(df$target)); sum(df$target == "");
+```
+
+
+## Individuals quality report
+
+During the exploratory data analysis, it was observed that many variables contain blank observations corresponding to missing values. This values have been set as NA or a new class unknown has been converted if the missingness percentage was very high. Therefore, the functions *gg_miss_upset* and *gg_miss_var* from the *naniar* library were applied to study these missing values.
+
+It is worth noting that enrollee_id, city, city_development_index, relevant_experience, training_hours, and the target variable do not have any missing values.
+
+The majority of missing values are found in company_type and company_size, each accounting for approximately 30% of the missing data. These are followed by gender and major_discipline, which contain 24.5% and 14.6% missing values, respectively. Finally, education_level, last_new_job, enrolled_university, and experience only account for 0.3-2.4% of missing values.
+
+As expected, most observations with missing company_size also have missing company_type, indicating a general absence of company-related information. Interestingly, gender has many observations with missing values only in this variable, suggesting that it might not have been mandatory to provide a response.
+
+Not a high proportion of the observations have missing values across all variables, indicating that the missingness is not completely random across the dataset. Instead, it tends to be concentrated in specific variables, such as company_type, company_size, and gender, showing a clear pattern of missingness.
+
+Hence, observations with missing values should not be deleted, as this could introduce bias. Depending on the variable, missing values should either be imputed or the variable should not be used in the analysis.
+
+```{r}
+df_aux <- df
+df_aux$gender[which(df_aux$gender == "Other/Unknown")] <- NA
+df_aux$company_size[which(df_aux$company_size == "Unknown")] <- NA
+df_aux$company_type[which(df_aux$company_type == "Unknown")] <- NA
+
+gg_miss_var(df_aux[c(4,6:12)])
+gg_miss_upset(df_aux[c(4,6:12)])
+```
+
+## Data Imputation
+
+The enrolled_university, education_level, major_discipline, experience, f.experience and last_new_job variables present missing values that will be imputed.
+
+Because the factorized variable f.experience is related with its numerical form, imputing it directly would break the logical relationship between them. Once the missing values in the numerical form have been imputed, the factorized version will be recomputed based on the newly completed data. Then, the new factorized variables will be compared with their pre-imputation versions to verify that the imputation process has not substantially altered their distributions.
+
+```{r}
+res.mice <- mice(df[,c(3:14)])
+df_imp <- complete(res.mice)
+```
+
+The proportions for the variables enrolled_university, education_level, major_discipline and last_new_job are nearly identical in both the original and the imputed dataframes.
+
+```{r}
+prop.table(table(df$enrolled_university))
+prop.table(table(df_imp$enrolled_university))
+
+prop.table(table(df$education_level))
+prop.table(table(df_imp$education_level))
+
+prop.table(table(df$major_discipline))
+prop.table(table(df_imp$major_discipline))
+
+prop.table(table(df$last_new_job))
+prop.table(table(df_imp$last_new_job))
+
+df$enrolled_university <- df_imp$enrolled_university
+df$education_level <- df_imp$education_level
+df$major_discipline <- df_imp$major_discipline
+df$last_new_job <- df_imp$last_new_job
+```
+
+The histograms of the imputed and non-imputed observations of the experience variable show the same distribution. Moreover, the quantiles are identical, indicating that both graphical and numerical assessments are consistent. When examining the factorized version of the variable, it can be observed that the proportions are nearly equal for both imputed and original observations.
+
+```{r}
+par(mfrow=c(1,2)) 
+hist(df$experience)
+hist(df_imp$experience)
+
+quantile(df$experience, na.rm = TRUE)
+quantile(df_imp$experience)
+
+df_imp$f.experience <- ifelse(df_imp$experience < 1, "<1", ifelse(df_imp$experience > 20, ">20",as.character(df_imp$experience)))
+df_imp$f.experience <- as.factor(df_imp$f.experience)
+
+prop.table(table(df$f.experience))
+prop.table(table(df_imp$f.experience))
+
+df$experience <- df_imp$experience
+df$f.experience <- df_imp$f.experience
+```
+
+Hence, we accept the imputation.
+
+# Multiple linear regression model
+
+## Correlation between variables
+
+The numeric variables used as explanatory variables in the linear regression model should not be highly correlated, as multicollinearity can distort the estimation of coefficients and reduce the interpretability of the model.
+
+```{r}
+num_vars <- c("city_development_index", "training_hours", "experience")
+df_numeric <- df[, num_vars]
+```
+
+Training hours appear largely independent of the other variables, showing negligible correlations across the board. In contrast, experience a low moderate positive correlation with city_development_index, suggesting that individuals in more developed cities generally have higher levels of experience.
+
+```{r}
+corr_mat <- cor(df_numeric)
+corrplot(corr_mat, method = "color", tl.col = "black", tl.srt = 45, addCoef.col = "black")
+
+plot(df_numeric)
+```
+## Multivariant outliers detection
+
+We have already examined the univariate outliers of the numeric variables, identifying extreme values in each variable individually. However, some observations may not appear as outliers when looking at a single variable, but are unusual when considering multiple variables simultaneously. Therefore, we now need to detect multivariate outliers, which are observations that deviate significantly from the overall pattern of the numeric data.
+
+Moutlier is a function designed to detect multivariate outliers in a dataset using the Mahalanobis Distance and the Robust Distance.
+
+```{r}
+res.mout <- Moutlier(df_numeric,quantile=0.95, plot = F)
+
+plot(res.mout$md,res.mout$rd,col="cyan",pch=19)
+abline(h=res.mout$cutoff,col="red",lwd=2)
+abline(v=res.mout$cutoff,col="red",lwd=2)
+text(res.mout$md,res.mout$rd,label=row.names(df),cex=0.5)
+```
+
+There are some extreme multivariate outliers in the dataset that could negatively affect the model estimates and predictions. These outliers represent observations with unusual combinations of predictor values that do not conform to the general pattern of the data. Rather than removing them outright, we will flag these observations by creating a binary variable called isOutlier.
+
+```{r}
+ll <- which( (res.mout$md>res.mout$cutoff) & (res.mout$rd>res.mout$cutoff))
+
+df$isOutlier <- 0
+df$isOutlier[ll] <- 1
+
+df$isOutlier <- as.factor(df$isOutlier)
+```
+
+The catdes function from the FactoMineR package was applied to the binary multivariate variable to assess the behavior of multivariate outliers.
+
+The results suggest that the binary factor indicating multivariate outliers is not independent of the categorical variables. It is worth noting that the target variable has a higher proportion of outliers in category 1 than the overall proportion of the variable. Moreover, the multivariant outliers tend to be in levels f.experience=>20 and education_level=Phd.
+
+Furthermore, the binary factor also appears to be related to the numerical variables. Specifically, multivariate outlier observations exhibit a higher mean than the overall mean for training_hours (82 units) and experience experience (almost 4 units). Conversely, they show lower mean than the overall average city_development_index (15 units).
+
+```{r}
+res.cat <- catdes(df[,c(3:16)], 14)
+res.cat$test.chi2
+res.cat$category
+res.cat$quanti.var
+res.cat$quanti
+```
+## Profiling the target
+
+We can highlight that the numerical variables most strongly associated with the target variable (i.e., those with the highest Eta2 values) are city_development_index followed by experience.
+
+The main differences between individuals seeking a new job (value 1) and those not seeking one (value 0) lie primarily in the fact that job seekers tend to have, on average, less work experience and a lower city development index compared to the overall mean. Specifically, they are 23.5 and 47 units below the overall mean, respectively.
+Moreover, their training_hours also show lower mean than the overall average.
+
+The results also suggest that the target is not independent of the categorical variables. It is mostly related with the company size, type and factorized experience variables.
+
+Job seekers tend to be overrepresented among individuals with unknown company size or type, and lower levels of experience, particularly those in the "<1" experience group. This group is also characterized by a predominance of full-time course participants and individuals with no relevant experience.
+
+On the other hand, individuals not seeking a job are overrepresented in higher experience levels. They are also more likely to work for well-defined ans small companies, specially in private limited firms. They tend to have relevant work experience while not being enrolled in a university. Gender also differs between the groups, with males more prevalent among non-job seekers.
+
+```{r}
+res.cat <- catdes(df[,c(3:15)], num.var = 12)
+res.cat$test.chi2
+res.cat$category
+res.cat$quanti.var
+res.cat$quanti
+```
+## Variable creation
+
+It might be a good idea to discretize the numeric variables. Maybe, taking the city_development_index and training_hours variables as a factor improves the model’s performance. We will discretize the variables using its quantile values. 
+
+Since the city_development_index variable is highly right-skewed, the fourth and fifth quantiles are very close to each other, creating intervals with almost identical upper bounds. Therefore, we will group all observations with a city_development_index greater than 0.92 into a single category rather than dividing the observations with the same city_development_index into two groups.
+
+The training_hours variable does break into five different groups determined by their quantiles.
+
+```{r}
+breaks <- quantile(df$city_development_index, prob = seq(0,1,0.20)); breaks
+df$f.city_development_index <- cut(df$city_development_index, unique(breaks), include.lowest = TRUE)
+summary(df$f.city_development_index)
+
+breaks <- quantile(df$training_hours, probs = seq(0,1,0.2)); breaks
+df$f.training_hours <- cut(df$training_hours, breaks, include.lowest = TRUE)
+summary(df$f.training_hours)
+```
+
+Taking into account that the purpose of the project is to develop a linear regression model, it might be advisable to group the experience variable into broader categories.
+
+A possible grouping would define very low experience as "<1"-"2" years, low to medium experience as "3"-"6" years, medium experience as "7"-"10" years, high experience as "11"-"20" years, and very high experience as ">20" years. With this approach, we will reduce sparsity in extreme levels and achieve a more balanced distribution. This grouping would also help stabilize estimates and make the model more interpretable.
+
+```{r}
+#m <- glm(target~f.experience, data = df, family=binomial)
+#summary(m)
+
+df$f.experience_grouped <- fct_collapse(df$f.experience,
+"Very Low" = c("<1", "1", "2"),
+"Low-Medium" = c("3", "4", "5", "6"),
+"Medium" = c("7", "8", "9", "10"),
+"High" = c("11","12","13","14","15","16","17","18","19","20"),
+"Very High" = c(">20")
+)
+
+df$f.experience_grouped <- factor(df$f.experience_grouped,
+levels = c("Very Low", "Low-Medium", "Medium", "High", "Very High"), ordered = TRUE)
+
+summary(df$f.experience_grouped)
+prop.table(table(df$f.experience_grouped))
+```
+
+## Split data into train and test
+
+We will separate the sample into two groups: one for training the model and the otherone for testing if the final model aligns well with data.
+
+```{r}
+lltrain <- sample(1:nrow(df),round(0.8*nrow(df),dig=0))
+dftrain <- df[lltrain,]
+dftest <- df[-lltrain,]
+```
+## Modelling
+### Null model
+
+We begin by evaluating the null model, which assumes that all individuals share the same probability of the target outcome, without considering any explanatory variables. Taiking into account the AIC statistic, the model can clearly be improved.
+
+```{r}
+m0 <- glm(target~1, data = dftrain, family = binomial)
+
+AIC(m0)
+m0$deviance
+```
+
+### Modelling with numerical variables
+
+```{r}
+summary(dftrain)
+mNum <- glm(target~city_development_index + experience + training_hours, data = dftrain, family = binomial)
+
+step(mNum)
+Anova(mNum)
+
+vif(mNum)
+```
+
+```{r}
+residualPlot(mNum)
+marginalModelPlots(mNum)
+```
+
+```{r}
+mNumPoly <- glm(target~poly(city_development_index,3) + poly(experience,2) + training_hours, data = dftrain, family = binomial)
+
+step(mNumPoly)
+Anova(mNumPoly)
+
+anova(mNum, mNumPoly)
+```
+```{r}
+residualPlots(mNumPoly)
+marginalModelPlots(mNumPoly)
+```
+
+### Adding factors
+
+```{r}
+mFact <- glm(target~poly(city_development_index,3) + poly(experience,2) + training_hours + gender + relevent_experience + enrolled_university + education_level + major_discipline + company_size + company_type + last_new_job + f.training_hours + f.city_development_index + f.experience_grouped, data = dftrain, family = binomial)
+
+summary(df$last_new_job)
+
+step(mFact)
+```
+
+```{r}
+mFactReduced1 <- glm(target ~ poly(experience, 2) + training_hours + gender + relevent_experience + enrolled_university + education_level + company_size + company_type + last_new_job + f.city_development_index, family = binomial, data = dftrain)
+
+mFactReduced2 <- glm(target ~ poly(city_development_index, 3) + poly(experience, 2) + training_hours + gender + relevent_experience + enrolled_university + education_level + company_size + company_type + last_new_job, family = binomial, data = dftrain)
+
+AIC(mFactReduced1, mFactReduced2)
+```
+
+
+```{r}
+Anova(mFactReduced2)
+
+
+residualPlot(mFactReduced2)
+```
+
+### Adding interacions
+
+Per mirar les interactions podriem fer el plot de les means vs category i si es tallen la interaction es important
+
+

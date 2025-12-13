@@ -1,0 +1,743 @@
+---
+title: "Assignment 2"
+author: "Berta Torrents & Carles Aguilera"
+date: "2025-11-11"
+output:
+  pdf_document: default
+  html_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(readr)
+library(pROC)
+library(ResourceSelection)
+library(chemometrics)
+library(mice)
+library(car)
+library(FactoMineR)
+library(MASS)
+library(AER)
+library(effects)
+library(lmtest)
+library(DescTools)
+library(ResourceSelection)
+library(statmod)
+library(cvAUC)
+library(caret)
+library(ModelMetrics)
+rm(list=ls())
+```
+
+
+```{r}
+df <- read.csv('aug_train.csv')
+str(df)
+summary(df)
+```
+
+**SUMMARY**
+Here we can observe that there is a large amount of missing or inconsistent data.
+In most variables, there are several observations with missing values, which indicates data quality issues.
+
+We are therefore aware of this inconsistency and will apply imputation methods to address the problem and improve the overall data quality, as this is something commonly encountered in real-world datasets.
+
+**VARIABLE 1 enrollee_id**
+
+The variable enrollee_id is used to uniquely identify each candidate within the dataset sample.
+Therefore, it is considered a numeric identification variable, meaning it serves as a unique identifier for each individual or observation, but does not provide any analytical or predictive information about the candidates themselves.
+```{r}
+class(df$enrollee_id)
+df$enrollee_id <- as.factor(df$enrollee_id)
+summary(df$enrollee_id)
+sum(is.na(df$enrollee_id))
+length(unique(df$enrollee_id))
+```
+
+
+**VARIABLE 2 city**
+```{r}
+# CATEGORICAL VARIABLE.ç
+class(df$city)
+df$city <- as.factor(df$city)
+sort(table(df$city)); 
+sum(is.na(df$city)); sum(df$city == "")
+length(unique(df$city))
+```
+
+For this variable, we can observe that the three cities with the highest number of candidates are:
+  - city_103 --> 4.355 candidates
+  - city_21 --> 2.702 candidates
+  - city_16 --> 1.533 candidates
+
+On the other hand, the cities with the lowest representation are:
+  - city_140 --> 1 candidate
+  - city_171 --> 1 candidate
+  - city_111 --> 3 candidates (same as city_121 and city_129).
+
+Here we have not missing data or blank values. 
+
+**VARIABLE 3 CITY_DEVELOPMENT_INDEX**
+```{r}
+class(df$city_development_index)
+
+summary(df$city_development_index)
+sum(is.na(df$city_development_index)) # The variable 'city_development_index' contains no missing or blank values.
+Boxplot(df$city_development_index)
+# As we can see with the Boxplot we have some values that are outliers, let's see how many of them and the one's that are missing.
+var_out <- summary(df$city_development_index); var_out
+iqr <- var_out[5] - var_out[2]; iqr
+llmild <- which(df$city_development_index < var_out[2] - 1.5*iqr | df$city_development_index > var_out[5] + 1.5*iqr); length(llmild)
+llsev <- which(df$city_development_index < var_out[2] - 3*iqr | df$city_development_index > var_out[5] + 3*iqr); length(llsev)
+# We have 17 univariate outlaiers in the city development index
+Boxplot(df$city_development_index)
+abline(h = var_out[2] - 1.5*iqr, col = 'green')
+abline(h = var_out[5] + 1.5*iqr, col = 'red')
+abline(h = var_out[2] - 3*iqr, col = 'green')
+abline(h = var_out[5] + 3*iqr, col = 'red')
+df[llmild,]
+sum(is.na(df$city_development_index)); sum(df$city_development_index == "")
+
+hist(df$city_development_index, freq = FALSE)
+curve(dnorm(x, mean = mean(df$city_development_index), sd=sd(df$city_development_index)), lwd = 2, add = T)
+
+hist(log(df$city_development_index), freq = FALSE)
+curve(dnorm(x, mean = mean(log(df$city_development_index)), sd=sd(log(df$city_development_index))), lwd = 2, add = T)
+
+```
+
+For this variable, we identified a total of 17 univariate outliers, all of which belong to the same city (city_33).
+These cases stand out because most of the candidates do not have relevant experience.
+Similarly, in the major_discipline variable, the majority are from the STEM field, and it is also noticeable that most of them hold a graduate degree. Also we can observe the minimum value that is 0.448 and the maximum one that is 0.9490.
+In that variable we haven't missing data or blank values.
+
+We can observe that the distribution of this variable deviates from normality, and that even after applying a logarithmic transformation, it cannot be properly normalized.
+
+It might be a good idea to discretize this numeric variable. Maybe, taking this variable as a factor improves the model’s performance. We will discretize the variable using its quantile values. Since this variable is highly right-skewed, the fourth and fifth quantiles are very close to each other, creating intervals with almost identical upper bounds. Therefore, we will group all observations with a city_development_index greater than 0.92 into a single category rather than dividing the observations with the same city_development_index into two groups. 
+
+```{r}
+breaks <- quantile(df$city_development_index, prob = seq(0,1,0.20)); breaks
+df$f.city_development_index <- cut(df$city_development_index, unique(breaks), include.lowest = TRUE)
+summary(df$f.city_development_index);
+```
+
+
+**VARIABLE 4 GENDER**
+```{r}
+class(df$gender)
+df$gender <- as.factor(df$gender)
+table(df$gender); prop.table(table(df$gender))
+pie(table(df$gender))
+sum(is.na(df$gender)); sum(df$gender == "");
+df$gender <- as.character(df$gender)
+df$gender[which(df$gender == "" | is.na(df$gender))] <- "NotAnswer"
+df$gender <- as.factor(df$gender)
+summary(df$gender)
+# PODEM AGRUPAR OTHER AMB NOTANSWER ? **TODO: ESPERAR RESPOSTA DE JOSEP**
+```
+In this variable, we can observe that the proportion of males is significantly higher compared to other genders.
+Specifically, males account for 69% of the total sample.
+
+This imbalance can be clearly seen both graphically and through the statistical results obtained using the prop.table() function, which confirm this finding.
+Therefore, we can conclude that the majority of individuals in our dataset are male.
+
+Finally comment that we have a total of 4508 values that are blank, so we consider this as missing data. 
+
+
+**VARIABLE 5 RELEVENT EXPERIENCE**
+
+```{r}
+class(df$relevent_experience)
+df$relevent_experience <- as.factor(df$relevent_experience)
+table(df$relevent_experience); prop.table(table(df$relevent_experience))
+pie(table(df$relevent_experience))
+sum(is.na(df$relevent_experience)); sum(df$relevent_experience == "")
+```
+We can observe that the vast majority of individuals in the dataset have relevant experience, accounting for approximately 72% of the total sample.
+It is also important to note that this variable contains no missing or blank values, which indicates good data quality for this feature.
+
+**VARIABLE 6 enrolled_university**
+
+```{r}
+class(df$enrolled_university)
+df$enrolled_university <- as.factor(df$enrolled_university)
+table(df$enrolled_university); prop.table(table(df$enrolled_university))
+pie(table(df$enrolled_university))
+sum(is.na(df$enrolled_university)); sum(df$enrolled_university == "")
+df$enrolled_university[which(df$enrolled_university == "")] <- NA
+df$enrolled_university <- droplevels(df$enrolled_university)
+```
+
+It is worth noting that, for this variable, the majority of observations fall under the category no_enrollment.
+Specifically, a total of 13,817 individuals, representing approximately 72.12% of the sample, have the value enrolled_university = no_enrollment.
+
+It is also important to note that this variable contains a total of 386 blank values.
+Therefore, we will replace these blank entries with NA in order to handle them properly during the data cleaning and analysis process.
+
+**VARIABLE 7 EDUCATION LEVEL**
+
+```{r}
+class(df$education_level)
+df$education_level <- as.factor(df$education_level)
+table(df$education_level); prop.table(table(df$education_level))
+sum(is.na(df$education_level)); sum(df$education_level == "")
+df$education_level[which(df$education_level == "")] <- NA
+df$education_level <- droplevels(df$education_level)
+```
+
+In this variable, we can observe that most observations correspond to individuals with a graduate-level education, accounting for approximately 60.53% of the total, followed by those with a master’s degree at 22.76%.
+Therefore, we can conclude that the vast majority of individuals hold either a bachelor’s or a master’s degree.
+
+It is also worth noting that, as in other variables (460 cases), this one contains blank values, which we will replace with NA to ensure consistent handling of missing data during the analysis.
+
+**VARIABLE 8 MAJOR DISCIPLINE**
+
+```{r}
+class(df$major_discipline)
+df$major_discipline <- as.factor(df$major_discipline)
+table(df$major_discipline); prop.table(table(df$major_discipline))
+pie(table(df$major_discipline))
+sum(is.na(df$major_discipline)); sum(df$major_discipline == "")
+df$major_discipline[which(df$major_discipline == "")] <- NA
+df$major_discipline <- droplevels(df$major_discipline)
+```
+
+In this variable, we can observe that the dominant discipline is STEM, with a total of 14,492 observations, representing approximately 75.64% of the dataset.
+This indicates that most candidates come from science, technology, engineering, or mathematics backgrounds.
+
+However, it is important to note that this variable contains 2,813 blank values. Although there are no explicit missing (NA) entries, these blank cells are treated as missing data, and we have therefore replaced them with NA to ensure consistency in the handling of missing values.
+
+
+**VARIABLE 9 EXPERIENCE **
+
+The experience variable was stored as a character. Since it corresponds to a categorical variable, it has been converted into a factor. This variable has 21 levels: <1, 1-19, >20.
+
+Note that 65 observations (in other words, a 0.3% of the observations) of this variable are missing. These blank observations have been set as missing values that should lately be taken into account.
+
+Moreover, this variable is highly unbalanced. The vast majority of observations (17.15%) correspond to people with more than 20 years of experience, as this category groups many experience levels together. Therefore, it might be a good idea to regroup this variable to achieve a more balanced distribution.
+
+```{r}
+class(df$experience)
+
+x <- c("", "<1", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", ">20")
+
+df$experience <- factor(df$experience, levels = x, ordered = TRUE)
+summary(df$experience)
+prop.table(table(df$experience))
+barplot(table(df$experience))
+sum(is.na(df$experience)); sum(df$experience == "");
+df$experience[which(df$experience == "")] <- NA
+df$experience <- droplevels(df$experience)
+```
+
+The proportion of individuals with relevant experience is very low at the extremes of the variable ("<1", "1" and "2" levels). Then, it increases sharply in the middle ranges (from "3" to "10" years). Finally, it gradually decreases for most higher experience levels. Interestingly, the ">20" category shows a spike in relevant experience, reflecting that individuals with upper extreme experience levels accumulate a large amount of relevant experience. This pattern indicates that the relationship between years of experience and relevant experience is non-linear.
+
+```{r}
+prop.table(table(df$relevent_experience, df$experience))
+```
+
+**VARIABLE 10 COMPANY SIZE**
+
+```{r}
+class(df$company_size)
+
+x <- c("", "<10", "10/49", "50-99", "100-500", "500-999", "1000-4999", "5000-9999", "10000+")
+
+df$company_size <- factor(df$company_size, levels = x, ordered = TRUE)
+
+levels(df$company_size) <- c(levels(df$company_size), "Unknown")
+df$company_size[df$company_size == ""] <- "Unknown"
+df$company_size <- droplevels(df$company_size)
+
+summary(df$company_size)
+
+prop.table(table(df$company_size))
+barplot(table(df$company_size))
+```
+In this variable, we can observe that it is one of the features with the highest amount of missing data, with approximately 31% of blank or missing entries.
+Among the valid observations, the most represented category is company_size = 100–500, accounting for 13.42%, followed by 10000+ with 10.54%.
+
+Regarding the blank values (a total of 5,938), we will replace them with NA in order to impute them properly during the subsequent stages of data processing.
+
+**VARIABLE 11 COMPANY TYPE**
+
+```{r}
+class(df$company_type)
+
+df$company_type <- as.factor(df$company_type)
+
+levels(df$company_type) <- c(levels(df$company_type), "Unknown")
+df$company_type[df$company_type == ""] <- "Unknown"
+df$company_type <- droplevels(df$company_type)
+
+summary(df$company_type)
+
+prop.table(table(df$company_type))
+barplot(table(df$company_type))
+
+```
+
+Regarding the company_type variable, it is worth noting that more than half of the observations correspond to the Pvt Ltd category.
+Therefore, we can conclude that the majority of individuals in the dataset are employed in private limited companies.
+
+Additionally, this variable contains missing data (blank values), which will be treated as NA.
+In total, there are 6,140 blank entries, which will be handled or imputed during later stages of the analysis.
+
+**VARIABLE 12 LAST_NEW_JOB**
+
+```{r}
+
+class(df$last_new_job)
+df$last_new_job <- as.factor(df$last_new_job)
+table(df$last_new_job); prop.table(table(df$last_new_job))
+barplot(table(df$last_new_job))
+sum(is.na(df$last_new_job)); sum(df$last_new_job == "")
+df$last_new_job[which(df$last_new_job == "")] <- NA
+df$last_new_job <- droplevels(df$last_new_job)
+```
+
+
+In this variable, we can observe that the most frequent value is one year for the last_new_job feature, representing approximately 42% of the total observations.
+
+It is also important to note that this variable contains 423 blank values, which will be treated as missing (NA) so that they can be properly imputed or handled during the subsequent stages of the analysis.
+
+
+**VARIABLE 13 training_hours**
+
+```{r}
+class(df$training_hours)
+df$training_hours <- as.numeric(df$training_hours)
+var_out <- summary(df$training_hours); var_out
+Boxplot(df$training_hours)
+iqr <- var_out[5] - var_out[2]; iqr
+
+llmild <- which(df$training_hours < var_out[2] - 1.5*iqr | df$training_hours > var_out[5] + 1.5*iqr); length(llmild)
+llsev <- which(df$training_hours < var_out[2] - 3*iqr | df$training_hours > var_out[5] + 3*iqr); length(llsev)
+
+Boxplot(df$training_hours)
+abline(h = var_out[2] - 1.5*iqr, col = 'green')
+abline(h = var_out[5] + 1.5*iqr, col = 'green')
+abline(h = var_out[2] - 3*iqr, col = 'red')
+abline(h = var_out[5] + 3*iqr, col = 'red')
+
+hist(df$training_hours, freq = FALSE)
+curve(dnorm(x,mean = mean(df$training_hours), sd = sd(df$training_hours)), lwd = 2, add = T)
+hist(log(df$training_hours), freq = FALSE)
+curve(dnorm(x,mean = mean(log(df$training_hours)), sd = sd(log(df$training_hours))), lwd = 2, add = T)
+```
+
+
+In this variable, it is worth noting that a total of 275 severe outliers and 709 mild outliers have been identified.
+There are no missing values in this feature.
+The maximum recorded value is 336 hours, while the minimum value is 1 hour.
+
+We can observe that the distribution of this variable deviates from normality, and that even after applying a logarithmic transformation, it cannot be properly normalized.
+
+It might be a good idea to discretize this numeric variable. Maybe, taking this variable as a factor improves the model’s performance. We will discretize the variable using its quantile values.
+
+```{r}
+breaks <- quantile(df$training_hours, probs = seq(0,1,0.2)); breaks
+df$f.training_hours <- cut(df$training_hours, breaks, include.lowest = TRUE)
+summary(df$f.training_hours)
+```
+
+
+**VARIABLE 14 target**
+
+```{r}
+class(df$target)
+df$target <- as.factor(df$target)
+table(df$target); prop.table(table(df$target))
+barplot(table(df$target))
+sum(is.na(df$target)); sum(df$target == "")
+```
+
+The target variable is binary and indicates whether individuals are seeking a job change or not.
+Thus, this feature allows us to analyze the proportion of candidates currently looking for new employment opportunities.
+
+We can observe that 75% of individuals have a value of 0, meaning they are not seeking a job change, while 24.93% have a value of 1, indicating that they are actively looking for a new job.
+
+It is also important to note that this binary target variable contains no missing values.
+
+
+```{r}
+colSums(is.na(df))
+```
+Finally, we can observe the total number of missing values for each variable or factor.
+After the data cleaning process, blank values have been converted into NA, ensuring that all missing information is consistently represented.
+
+This transformation greatly simplifies the handling of missing data, particularly during the imputation stage, as it allows for a clearer and more consistent approach to identifying and managing missing values.
+
+############################################## TRANSFORMING VARIABLES & IMPUTATION ##################################################
+#                                                                                                                                   #
+####################################################################################################################################
+
+Once some of the variables have been discretized, one additional step is still required: the imputation of missing (NA) values.
+This process will allow us to complete the dataset and obtain a fully populated version without missing entries.
+After performing imputation, we will then be able to discretize the numerical variables that currently cannot be transformed due to the presence of missing values, such as the experience variable.
+
+```{r}
+res.mice <- mice(df[,c(3:14)])
+df_imp <- complete(res.mice)
+summary(df); summary(df_imp)
+
+```
+
+
+The proportions for the variables enrolled_university, education_level, and major_discipline are nearly identical in both the original and the imputed dataframes.
+
+```{r}
+prop.table(table(df$enrolled_university))
+prop.table(table(df_imp$enrolled_university))
+
+prop.table(table(df$education_level))
+prop.table(table(df_imp$education_level))
+
+prop.table(table(df$major_discipline))
+prop.table(table(df_imp$major_discipline))
+
+df$enrolled_university <- df_imp$enrolled_university
+df$education_level <- df_imp$education_level
+df$major_discipline <- df_imp$major_discipline
+```
+
+
+The histograms of the imputed and non-imputed observations of the experience variable show the same distribution. Moreover, the quantiles are identical, indicating that both graphical and numerical assessments are consistent. When examining the factorized versions of the variable (normal and grouped), it can be observed that the proportions are nearly equal for both imputed and original observations.
+
+
+```{r}
+prop.table(table(df$experience)); prop.table(table(df_imp$experience))
+df$experience <- df_imp$experience
+
+# Turn into numeric the variable experience, and then put it as factor and grouped factor, above we can see it.
+df$experience <- as.character(df$experience)
+df$experience[which(df$experience == "<1")] <- "0.05"
+df$experience[which(df$experience == ">20")] <- "25"
+df$experience <- as.numeric(df$experience)
+summary(df$experience); hist(df$experience)
+
+df$f.experience <- as.factor(df_imp$experience)
+
+df$f.experience_grouped <- fct_collapse(df$f.experience,
+"Very Low" = c("<1", "1", "2"),
+"Low-Medium" = c("3", "4", "5", "6"),
+"Medium" = c("7", "8", "9", "10"),
+"High" = c("11","12","13","14","15","16","17","18","19","20"),
+"Very High" = c(">20")
+)
+
+df$f.experience_grouped <- factor(df$f.experience_grouped,
+levels = c("Very Low", "Low-Medium", "Medium", "High", "Very High"), ordered = TRUE)
+
+prop.table(table(df$f.experience))
+prop.table(table(df$f.experience_grouped))
+
+```
+
+The histograms of the imputed and non-imputed observations of the last_new_job variable show the same distribution. Moreover, the quantiles are identical, indicating that both graphical and numerical assessments are consistent. When examining the factorized version of the variable, it can be observed that the proportions are nearly equal for both imputed and original observations.
+
+```{r}
+prop.table(table(df$last_new_job)); prop.table(table(df_imp$last_new_job))
+df$last_new_job <- df_imp$last_new_job
+
+# CONVERT INTO NUMERIC AND THEN INTO CATEGORIC
+df$last_new_job <- as.character(df$last_new_job)
+df$last_new_job[which(df$last_new_job == "never")] <- 0.05
+df$last_new_job[which(df$last_new_job == ">4")] <- 5
+df$last_new_job <- as.numeric(df$last_new_job)
+summary(df$last_new_job)
+hist(df$last_new_job)
+
+# DISCRETITZADA.
+df$f.last_new_job <- df_imp$last_new_job
+prop.table(table(df$f.last_new_job))
+
+```
+
+
+Check that all is correctly imputed and all the different variables are transformated correctly
+
+```{r}
+colSums(is.na(df));
+```
+
+
+############################################################PROFILING##########################################################
+#                                                                                                                              #
+###############################################################################################################################
+
+
+```{r}
+res.cat <- catdes(df[,c(2:19)], num.var = 13)
+res.cat$quanti.var
+res.cat$quanti
+res.cat$category
+res.cat$test.chi2
+```
+
+We can highlight that the variables more associated with the target variable (i.e., those with the highest Eta2 values) are:
+  - city_development_index
+  - experience
+
+The main differences between individuals seeking a new job (value 1) and those not seeking one (value 0) lie primarily in the fact that job seekers tend to have, on average, less work experience and a lower city development index compared to the overall mean.
+
+Furthermore, within the group of individuals actively looking for a new job, there is a higher concentration in the city development index range [0.448, 0.691].
+This group is also characterized by a predominance of full-time course participants and individuals with no relevant experience, traits that are more common among job seekers.
+The most frequent cities within this group are city_21, city_11, and city_121, and there is also a higher proportion of graduates compared to the overall sample mean.
+
+We will now proceed to identify observations that can be considered multivariate outliers, meaning those that exhibit atypical values when multiple variables are analyzed simultaneously.
+The goal is to determine which observations are true multivariate outliers and to analyze which specific variables or characteristics contribute to their outlier status.
+
+```{r}
+res.mout <- Moutlier(df[,c(3,9,12,13)])
+plot(res.mout$md, res.mout$rd, col = 'lightblue')
+abline(h = res.mout$cutoff, col = 'red')
+abline(v = res.mout$cutoff, col = 'red')
+
+idx <- which(res.mout$md > res.mout$cutoff & res.mout$rd > res.mout$cutoff); length(idx)
+df$mvout <- 0
+df$mvout[idx] <- 1
+df$mvout <- factor(df$mvout, labels = c("MvoutN", "MvoutY"))
+res.cat <- catdes(df[,c(2:20)], num.var = 19)
+res.cat$quanti.var
+res.cat$quanti
+```
+
+Let's check the correlation in the numeric variables.
+
+```{r}
+num_vars <- c("training_hours", "last_new_job", "experience", "city_development_index")
+df_numeric <- df[, num_vars]
+```
+
+Training hours appear largely independent of the other variables, showing negligible correlations across the board. In contrast, experience and last_new_job exhibit a moderate positive relationship, indicating that individuals with more experience tend to have longer durations since their last employment. Experience also shows a low moderate positive correlation with city_development_index, suggesting that individuals in more developed cities generally have higher levels of experience.
+
+```{r}
+corr_mat <- cor(df_numeric)
+corrplot(corr_mat, method = "color", tl.col = "black", tl.srt = 45, addCoef.col = "black")
+plot(df_numeric)
+```
+
+
+```{r}
+set.seed(12345)
+options(contrasts=c("contr.treatment","contr.treatment"))
+```
+
+**SPLIT**
+WE HAVE TO SPLIT IN TRAIN AND TEST¡, IN THAT CASE WE WILL DO 80% TRAIN AND 20% FOR TEST & VALIDATION.
+
+```{r}
+n <- nrow(df)
+train_index <- sample(1:n, size = 0.7 * n)
+
+df_train <- df[train_index, ]
+df_test  <- df[-train_index, ]
+```
+
+
+# PRIMER NOMÉS NUMERIQUES
+
+```{r}
+m0 <- glm(target~1, family = binomial(), data = df_train)
+summary(m0)
+#-----------------------------------------------------------------------------------------------------------------------------------#
+#                                                                                                                                   #
+#-----------------------------------------------------------------------------------------------------------------------------------#
+
+mdl0 <- glm(target~city_development_index, family = binomial(), data = df_train)
+summary(mdl0)
+residualPlots(mdl0)
+par(mfrow=c(2,2))
+marginalModelPlots(mdl0)
+# VEIEM QUE AMB EL MARGINAL MODEL PLOTS PODRIEM APLICAR UNA TRANSFORMACIÓ POLINÒMICA CUBICA.
+
+mdl0v2 <- glm(target~poly(city_development_index,3), family = binomial(), data = df_train)
+summary(mdl0v2)
+residualPlots(mdl0v2)
+par(mfrow=c(2,2))
+marginalModelPlots(mdl0v2)
+anova(mdl0, mdl0v2, test = "Chisq") # És millor el model0v2.
+#----------------------------------------------------------------------------------------------------------------------------------#
+
+mdl1 <- glm(target~poly(city_development_index,3)+experience, family = binomial, data = df_train)
+summary(mdl1)
+residualPlots(mdl1)
+par(mfrow=c(2,2))
+marginalModelPlots(mdl1)
+anova(mdl0v2, mdl1, test = "Chisq") # Millor el mdl1.
+
+
+mdl1v2 <- glm(target~poly(city_development_index,3)+poly(experience,2), family = binomial, data = df_train)
+summary(mdl1v2)
+residualPlots(mdl1v2)
+par(mfrow=c(2,2))
+marginalModelPlots(mdl1v2)
+anova(mdl1, mdl1v2, test = "Chisq") # es millor mdl1v2
+
+#-----------------------------------------------------------------------------------------------------------------------------------#
+
+mdl2 <- glm(target~poly(city_development_index,3)+poly(experience,2)+training_hours, family = binomial, data = df_train)
+summary(mdl2)
+residualPlots(mdl2)
+marginalModelPlots(mdl2) # training hours, veiem com s'ajusta molt bé, per tant, no cal aplicar cap mena de transformació, com si hem fet amb les altres.
+anova(mdl1v2, mdl2, test = "Chisq")
+# Es millor el model 2, és a dir, es millor mdl2.
+
+#-----------------------------------------------------------------------------------------------------------------------------------#
+
+mdl3 <- glm(target~poly(city_development_index,3)+poly(experience,2)+training_hours+last_new_job, family = binomial, data = df_train)
+summary(mdl3)
+# AQUI VEIEM QUE NO ES GAIRE SIGNIFICATIVA LAST_NEW_JOB, TENIM EL P-VALUE > 0.05, PER TANT, ES INSIGNIFICANT AQUESTA VARIABLE.
+# AQUI SENT UN MODEL DE REGRESSIO LOGÍSITICA S'HA APLICARIA WALD'S TEST PER VEURE SI UNA VARIABLE / FACTOR ES SINGIFICATIVA O NO. 
+residualPlots(mdl3)
+marginalModelPlots(mdl3)
+anova(mdl2, mdl3, test = "Chisq") # A més veiem com en aquest cas, es millor el model simple, es a dir el curt senser last_new_job.
+#-----------------------------------------------------------------------------------------------------------------------------------#
+
+# De totes les variables numeriques podem dir que el millor model numeric que tenim es el mdl2.
+"glm(target~poly(city_development_index,3)+poly(experience,2)+training_hours, family = binomial, data = df_train)"
+
+stepnumeric <- step(mdl2)
+# THAT SHOWS US THAT FOR THE NUMERIC MODEL IS THE BEST WE CAN ACHIEVE, APPLYING ALL THE TRANSFORMATIONS WE HAVE OBSERVED.
+```
+
+# NUMERIC OR CATEGORIC ?
+
+```{r}
+# TENIM LES VARIABLES: City_dev_index, EXPERIENCE, TRAINING_HOUYRS & last_new_job FACTORITZADES/DISCREETITZADES, ANEM A FER UNAS PROBA I ES VEURE SI REALMENT S'ESTIMA MILLOR EL MODEL USANT AQUESTES VARIABLES COM A NUMERIQUES O COM A CATEGORIQUES (FENT ÚS DE LES DISCRETITZADES).
+
+m0 <- glm(target~f.city_development_index+f.experience+f.training_hours+f.last_new_job, family = binomial, data = df_train)
+m0v1 <- glm(target~f.city_development_index+f.experience_grouped+f.training_hours+f.last_new_job, family = binomial, data = df_train)
+summary(m0); summary(m0v1)
+residualPlots(m0); summary(m0v1)
+marginalModelPlots(m0); summary(m0v1)
+AIC(mdl2, m0, m0v1)
+# Es millor usar-les com a numeriques, ja que obtenim un valor millor de AIC.
+
+# VEIEM COM EN AQUEST CAS LA VARIABLE TRAINING_HOURS DISCRETITZADA NO ES SINGIFICATIVA, LLAVORS ANEM A PROVAR AMB EL MODEL NOMES DISCRETITZANT LA VARIABLE EXPEIRENCE
+
+m0v2 <- glm(target~poly(city_development_index,3)+f.experience_grouped+training_hours, family = binomial, data = df_train)
+summary(m0v2)
+residualPlots(m0v2)
+marginalModelPlots(m0v2)
+AIC(mdl2, mdl0v2)
+
+m0v3 <- glm(target~poly(city_development_index,3)+poly(experience,2)+f.training_hours, family = binomial, data = df_train)
+summary(m0v3)
+residualPlots(m0v3)
+marginalModelPlots(m0v3)
+AIC(mdl2, m0v3, m0v2)
+
+# The best model is taking the variables numerically, the numeric variables no the one's that are categorized.
+
+```
+
+# INTRODUCE THE CATEGORIC.
+
+```{r}
+md1 <- glm(target~poly(city_development_index,3)+poly(experience,2)+training_hours+gender+relevent_experience+enrolled_university+major_discipline+education_level+company_size+company_type, family = binomial, data = df_train)
+summary(md1)
+residualPlots(md1)
+marginalModelPlots(md1)
+
+step1 <- step(md1)
+
+md2 <- glm(target ~ poly(city_development_index, 3) + poly(experience, 2) + training_hours + relevent_experience + enrolled_university + education_level + company_size + company_type, family = binomial(), data = df_train)
+anova(md1, md2, test = "Chisq")
+# VEIEM COM P-VALUE > 0.05, PER TANT, SERIEN EQUIVALENTS, ENS QUEDARIEM AMB EL MODEL SIMPLE.
+summary(md2)
+residualPlots(md2)
+marginalModelPlots(md2)
+AIC(md2, mdl2, md1)
+```
+
+
+# INTRODUCE THE INTERACTIONS
+
+```{r}
+model1 <- glm(target ~ (poly(city_development_index, 3) + poly(experience, 2) + training_hours) * (relevent_experience + enrolled_university + education_level + company_size + company_type), family = binomial(), data = df_train)
+summary(model1)
+residualPlots(model1)
+marginalModelPlots(model1)
+
+step_int <- step(model1)
+
+mdl_f <- glm(target ~ poly(city_development_index, 3) * (relevent_experience +education_level +company_size) +
+poly(experience, 2) * relevent_experience +training_hours * education_level +enrolled_university + company_type, family=binomial(), data=df_train)
+
+summary(mdl_f)
+residualPlots(mdl_f)
+marginalModelPlots(mdl_f)
+
+AIC(model1, mdl_f, mdl2, md2, m0)
+
+```
+
+# LET'S TRY TO DETECT INFLUENTIAL DATA AND OUTLIERS IN DATA.
+
+```{r}
+par(mfrow=c(1,1))
+res_outliers <- rstudent(mdl_f)
+Boxplot(res_outliers)
+# RSTUDENT IT WILL BE USED TO DETECT OUTLIERS, IN THAT CASE FOLLOWIGN A T-STUDENT DISTRIBUTUION WE CONSIDER OUTLIERS THAT ONE'S THAT ARE:
+# |RSTUDENT > 3| DUE TO THE PROBABILITY IS 0.3, THAT IS TO SMALL.
+abline(h = 3, col = 'red');abline(h = -3, col = 'red')
+idx_eliminar <- which(res_outliers > 3 | res_outliers < -3); length(idx_eliminar); idx_eliminar
+
+# THEN WE'LL TAKE INTO ACCOUNT THE INFLUENTIAL VALUES, THE ONE'S THAT ARE AFFECTING OUR MODEL, WE'LL LOOK WITH COOK.DISTANCE
+# THEN, THE ONE'S THAT WE'LL CONSIDER INFLUNETIAL WILL BE THAT ONE'S THAT ARE COOKS.DISTANCE > 0.5 (POTENTIAL) AND EVEN THE ONE'S > 1(CRITICAL).
+res_dist <- cooks.distance(mdl_f)
+Boxplot(res_dist)
+abline(h = 0.5, col = 'orange')
+abline(h = 1, col = 'red')
+idx_eliminarv2 <- which(res_dist > 0.5); length(idx_eliminarv2)
+
+influencePlot(mdl_f)
+influenceIndexPlot(mdl_f)
+
+# WE CAN ALSO DELETE -> 3473, 18066 (CONSIDERAR AQUESTS).
+
+df_train <- df_train[-c(idx_eliminar, idx_eliminarv2),]
+```
+
+
+```{r}
+prob_test <- predict(mdl_f, newdata = df_test, type = "response")
+threshold <- 0.5
+pred_class <- ifelse(prob_test >= threshold, 1, 0); pred_class
+table(Predicted = pred_class, Actual = df_test$target)
+
+```
+
+# COMPUTE THE VALUES WITH ROC CURVE.
+
+```{r}
+accuracy  <- mean(pred_class == df_test$target); accuracy
+precision <- sum(pred_class == 1 & df_test$target == 1) / sum(pred_class == 1); precision
+recall    <- sum(pred_class == 1 & df_test$target == 1) / sum(df_test$target == 1); recall
+
+roc_obj <- roc(df_test$target, prob_test)
+auc(roc_obj)
+plot(roc_obj)
+```
+
+
+
+# holsem.test because we're working with disaggregated data.
+ FOR THE CALCULATION OF THE GODNESS OF FIT (GoF), BEING THE HYPTESIS TEST LIJKE THIS
+ H0: THE MODELS FITS CORRECTLY IN THE DATA, THEY'RE ALIGNED
+ H1: THEY ARE NOT ALIGNED, THE MODELS DOESN'T FITTS CORRECTLY TO THE DATA.
+ 
+
+```{r}
+df_test$target <- as.numeric(as.character(df_test$target))
+hoslem.test(df_test$target, prob_test, g = 5)
+```
+
