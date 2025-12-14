@@ -1000,6 +1000,7 @@ vif(mdl_f)
 residualPlots(mdl_f)
 marginalModelPlots(mdl_f)
 Anova(mdl_f, test = "LR")
+mdl_f <- glm(target ~ poly(city_development_index, 4) * (enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_type + last_new_job) + training_hours, family=binomial(), data=df_train)
 ```
 
 ### Detect influential data
@@ -1014,7 +1015,7 @@ Moreover, the boxplot of the hat values revealed several outstanding outliers, s
 df_train_clean <- df_train
 idx_influential <- c()
 
-mdl_f <- glm(target ~ poly(city_development_index, 4) * (relevent_experience + enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_size_group + company_type + last_new_job) + training_hours, family=binomial(), data=df_train_clean)
+mdl_f <- glm(target ~ poly(city_development_index, 4) * (enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_type + last_new_job) + training_hours, family=binomial(), data=df_train_clean)
 
 par(mfrow=c(1,1))
 rstudent_influential <- rstudent(mdl_f)
@@ -1037,7 +1038,7 @@ df_train_clean <- df_train_clean[-c(idx_cooks, idx_rstudent),]
 After removing the outstanding Cook’s distance and Pearson residuals outliers, there is still one observation that highly influences the model and should be removed.
 
 ```{r}
-mdl_f <- glm(target ~ poly(city_development_index, 4) * (relevent_experience + enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_size_group + company_type + last_new_job) + training_hours, family=binomial(), data=df_train_clean)
+mdl_f <- glm(target ~ poly(city_development_index, 4) * (enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_type + last_new_job) + training_hours, family=binomial(), data=df_train_clean)
 
 par(mfrow=c(1,1))
 rstudent_influential <- rstudent(mdl_f)
@@ -1053,7 +1054,6 @@ Boxplot(cook_influential)
 idx_cooks <- which(cook_influential > 0.5); length(idx_cooks);
 
 idx_influential <- c(idx_influential, idx_cooks, idx_rstudent)
-df_train_clean <- df_train_clean[-c(idx_cooks, idx_rstudent),]
 ```
 
 Note that we have removed the most influential observations. Some points still have high leverage and could be considered a priori influential, but since they are not outstanding in the Cook’s distance plot, we did not remove them to avoid introducing bias by excessively pruning the data.
@@ -1063,7 +1063,7 @@ The smooth of the residuals plot is nearly flat, indicating that the model fits 
 The marginal model plots show that the variables are well aligned with the data, confirming that the functional forms chosen for each predictor adequately capture their relationships with the response.
 
 ```{r}
-mdl_f <- glm(target ~ poly(city_development_index, 4) * (relevent_experience + enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_size_group + company_type + last_new_job) + training_hours, family=binomial(), data=df_train_clean)
+mdl_f <- glm(target ~ poly(city_development_index, 4) * (enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_type + last_new_job) + training_hours, family=binomial(), data=df_train_clean)
 par(mfrow=c(1,1))
 rstudent_influential <- rstudent(mdl_f)
 Boxplot(rstudent_influential)
@@ -1146,7 +1146,7 @@ Unlike the Hosmer-Lemeshow test, the Brier Score is robust to large sample sizes
 
 ```{r}
 target_numeric <- as.numeric(as.character(df_train_clean$target))
-hoslem.test(target_numeric, prob.tst, g = 4)
+hoslem.test(target_numeric, prob.tst, g = 10)
 BrierScore(target_numeric, prob.tst)
 ```
 
@@ -1202,7 +1202,7 @@ names(eff)
 **Categorical variables**
 
 *Enrolled university*
-Belonging to the category "no enrollment" is associated with a decrease in the odds of the positive outcome of approximately 25.29% compared to the reference category Full time course, all else being equal.
+Belonging to the category "no enrollment" is associated with a decrease in the odds of the positive outcome of approximately 30.76% compared to the reference category Full time course, all else being equal.
 
 ```{r}
 # Enrolled univerity
@@ -1216,7 +1216,7 @@ The rest of categories interpretation depend on the category level, the city dev
 
 Hence, it is better to interpret these variables using all effects plots.
 
-For both the relevant and no relevant experience categories, the effect of the city_development_index is strongly non-linear: the predicted probability increases sharply at low city_development_index values, reaches a maximum around 0.58-0.60, and then gradually decreases in highly developed cities. Nonetheless, both functions show intercepts, indicating that the interaction between has experience and city development is indeed meaningful.
+For each category of Enrolled University, the effect of the city_development_index is strongly non-linear: the predicted probability increases sharply at low city_development_index values, reaches a maximum around 0.58-0.60, and then gradually decreases in highly developed cities. Nonetheless, both functions show intercepts, indicating that the interaction between enrolled_university and city development is indeed meaningful.
 
 For individuals with low levels of experience, predicted probabilities are relatively similar across company types. However, as experience increases, substantial differences emerge, particularly in the public sector and NGOs, where experience has a stronger positive effect compared to startups and other company types.
 
@@ -1231,10 +1231,10 @@ Individuals working in companies with fewer than 10,000 employees or in the “U
 Finally, the relationship between city_development_index and the target probability is particularly striking. All company_type categories start with relatively high probabilities of being job-seeking in less developed cities and show a marked decline as the city development index increases. However, the Startup and Other categories display noticeably different and more irregular patterns, standing out from the overall trend and deviating more strongly from the rest. This reinforces the relevance of the interaction between company_type and city_development_index in explaining job-seeking behavior. 
 
 ```{r}
-# Interaction city_development_index with relevent_experience
-plot(eff$`poly(city_development_index,4):relevent_experience`,
+# Interaction city_development_index with enrolled_university.
+plot(eff$`poly(city_development_index,4):enrolled_university`,
      multiline=TRUE,
-     main="Effect of City Development by Relevant Experience")
+     main="Effect of City Development by Enrolled Universtiy")
 
 # Interaction experience with relevent_experience
 plot(eff$`company_type:poly(experience,2)`,
