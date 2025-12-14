@@ -1208,8 +1208,6 @@ Belonging to the category "no enrollment" is associated with a decrease in the o
 # Enrolled univerity
 val3 <- exp(coef(mdl_f)["enrolled_universityno_enrollment"]); val3
 (1-val3)*100
-
-plot(eff$enrolled_university)
 ```
 
 *Other variables*
