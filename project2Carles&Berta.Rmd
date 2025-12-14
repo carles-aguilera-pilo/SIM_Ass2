@@ -577,7 +577,7 @@ abline(v=res.mout$cutoff,col="red",lwd=2)
 text(res.mout$md,res.mout$rd,label=row.names(df),cex=0.5)
 ```
 
-There are 851 extreme multivariate outliers in the dataset that could negatively affect the model estimates and predictions. These outliers represent observations with unusual combinations of predictor values that do not conform to the general pattern of the data. Rather than removing them outright, we will flag these observations by creating a binary variable called isOutlier.
+There are 852 extreme multivariate outliers in the dataset that could negatively affect the model estimates and predictions. These outliers represent observations with unusual combinations of predictor values that do not conform to the general pattern of the data. Rather than removing them outright, we will flag these observations by creating a binary variable called isOutlier.
 
 ```{r}
 ll <- which( (res.mout$md>res.mout$cutoff) & (res.mout$rd>res.mout$cutoff)); length(ll)
@@ -1230,8 +1230,6 @@ For all the education levels, the effect of the city_development_index is strong
 
 Individuals working in companies with fewer than 10,000 employees or in the “Unknown” company-size category tend to show higher probabilities of being job-seeking in less developed cities. As the city development index increases, these probabilities generally decline or stabilize, and differences across company-size groups become less pronounced. For companies with 10,000 or more employees, the relationship with city development is non-linear, with probabilities increasing at intermediate levels of development before decreasing again. Overall, the convergence of the curves at higher levels of city development suggests that company-size effects are attenuated in more developed urban contexts.
 
-The relationship between training hours and the probability of the target is approximately linear and negative across all company size groups. While baseline probabilities differ by company size, the slopes of the curves are very similar, indicating that the effect of training hours is largely consistent across groups. The absence of curve intersections suggests that the interaction between training hours and company size is weak, and that the main effects capture most of the observed variation.
-
 Finally, the relationship between city_development_index and the target probability is particularly striking. All company_type categories start with relatively high probabilities of being job-seeking in less developed cities and show a marked decline as the city development index increases. However, the Startup and Other categories display noticeably different and more irregular patterns, standing out from the overall trend and deviating more strongly from the rest. This reinforces the relevance of the interaction between company_type and city_development_index in explaining job-seeking behavior. 
 
 ```{r}
@@ -1259,9 +1257,6 @@ plot(eff$`poly(city_development_index,4):education_level`,
 
 # Interaction city_development_index with company_size
 plot(effect(term = "poly(city_development_index,4):company_size_group",mod = mdl_f,xlevels = list(city_development_index = seq(min(df$city_development_index),max(df$city_development_index),length = 100),company_size_group = levels(df_train$company_size_group))),multiline = TRUE,ci.style = "none",main = "Effect of City Development Index by Company Size")
-
-# Interaction training_hour with company_size
-plot(effect(term = "company_size_group:training_hours",mod = mdl_f,xlevels = list(training_hours = seq(min(df$training_hours),max(df$training_hours),length = 100),company_size_group = levels(df_train$company_size_group))),multiline = TRUE,ci.style = "none",main = "Effect of Training Hours by Company Size")
 
 
 # Interaction city_development_index with company_type
