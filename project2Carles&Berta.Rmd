@@ -1239,7 +1239,7 @@ plot(eff$`poly(city_development_index,4):relevent_experience`,
 # Interaction experience with relevent_experience
 plot(eff$`company_type:poly(experience,2)`,
      multiline=TRUE,
-     main="Effect of Experience by Relevant Experience")
+     main="Effect of Company Type by Experience")
 
 # Interaction city_development_index with last_new_job
 plot(effect(term = "poly(city_development_index,4):last_new_job", mod = mdl_f, xlevels = list(city_development_index = seq(quantile(df$city_development_index, 0.1), quantile(df$city_development_index, 0.9), length = 100), last_new_job = levels(df$last_new_job))),multiline = TRUE,ci.style = "none",main = "Effect of City Development Index by Last New Job")
