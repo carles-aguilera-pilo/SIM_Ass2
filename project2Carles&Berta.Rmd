@@ -444,51 +444,6 @@ barplot(table(df$target))
 sum(is.na(df$target)); sum(df$target == "");
 ```
 
-## Missing values study: quality report
-
-During the exploratory data analysis, it was observed that many variables contain blank observations corresponding to missing values. This values have been set as NA or a new class unknown has been converted if the missingness percentage was very high. Therefore, the functions gg_miss_upset and gg_miss_var from the naniar library were applied to study these missing values.
-
-It is worth noting that enrollee_id, city, city_development_index, relevant_experience, training_hours, and the target variable do not have any missing values.
-
-The majority of missing values are found in company_type and company_size, each accounting for approximately 30% of the missing data. These are followed by gender, which contain 24.5% of missing values. Finally, education_level, last_new_job, enrolled_university, major_discipline and experience only account for 0.3-2.5% of missing values.
-
-As expected, most observations with missing company_size also have missing company_type, indicating a general absence of company-related information. Interestingly, gender has many observations with missing values only in this variable, suggesting that it might not have been mandatory to provide a response.
-
-Not a high proportion of the observations have missing values across all variables, indicating that the missingness is not completely random across the dataset. Instead, it tends to be concentrated in specific variables, such as company_type, company_size, and gender, showing a clear pattern of missingness.
-
-Hence, observations with missing values should not be deleted, as this could introduce bias. Depending on the variable, missing values should either be imputed or the variable should not be used in the analysis.
-
-```{r}
-df_aux <- df
-df_aux$gender[which(df_aux$gender == "Other/Unknown")] <- NA
-df_aux$company_size[which(df_aux$company_size == "Unknown")] <- NA
-df_aux$company_type[which(df_aux$company_type == "Unknown")] <- NA
-
-gg_miss_var(df_aux[c(4,6:12)])
-gg_miss_upset(df_aux[c(4,6:12)])
-```
-
-A more detailed analysis of the missingness in the company_type variable reveals that missing observations are far from randomly distributed. Individuals whose company_size is unknown are disproportionately likely to fall into this category, making this factor the strongest indicator of missing company type. Additionally, people living in city_21 are also over-represented in the "Unknown" group. From a career and education perspective, this class contains a higher proportion of individuals who have never changed jobs, lack relevant work experience, and are currently enrolled in a full-time university program.
-
-Moreover, observations with missing values in company_type exhibit a city_development_index that is, on average, three units below the overall mean.
-
-```{r}
-res.cat <- catdes(df[c(3:15),], 11)
-res.cat$category
-res.cat$quanti
-```
-
-On the other hand, the missingness in the company_size variable appears to be systematically associated with a specific subgroup of individuals. Missing values are far more common among people who have never had a last new job, whose company_type is also unknown, and who report no relevant work experience. In addition, they are clearly over-represented among residents of city_21, which confirms that individuals living in this city tend to have less complete employment records.
-
-Moreover, observations with missing values in company_size have, on average, experience and city_development_index values that are approximately two and three units below the overall mean, respectively.
-
-```{r}
-df[c(3:15),]
-res.cat <- catdes(df[c(3:15),], 10)
-res.cat$category
-res.cat$quanti
-```
-
 ## Data Imputation
 
 The enrolled_university, education_level, major_discipline, experience, f.experience and last_new_job variables present missing values that will be imputed.
@@ -543,26 +498,6 @@ df$f.experience <- df_imp$f.experience
 
 Hence, we accept the imputation.
 
-# Multiple linear regression model
-
-## Correlation between variables
-
-The numeric variables used as explanatory variables in the linear regression model should not be highly correlated, as multicollinearity can distort the estimation of coefficients and reduce the interpretability of the model.
-
-```{r}
-num_vars <- c("city_development_index", "training_hours", "experience")
-df_numeric <- df[, num_vars]
-```
-
-Training hours appear largely independent of the other variables, showing negligible correlations across the board. In contrast, experience shows a low moderate positive correlation with city_development_index, suggesting that individuals in more developed cities generally have higher levels of experience.
-
-```{r}
-corr_mat <- cor(df_numeric)
-corr_mat
-corrplot(corr_mat, method = "color", tl.col = "black", tl.srt = 45, addCoef.col = "black")
-plot(df_numeric)
-```
-
 ## Multivariant outliers detection
 
 We have already examined the univariate outliers of the numeric variables, identifying extreme values in each variable individually. However, some observations may not appear as outliers when looking at a single variable, but are unusual when considering multiple variables simultaneously. Therefore, we now need to detect multivariate outliers, which are observations that deviate significantly from the overall pattern of the numeric data.
@@ -570,6 +505,7 @@ We have already examined the univariate outliers of the numeric variables, ident
 Moutlier is a function designed to detect multivariate outliers in a dataset using the Mahalanobis Distance and the Robust Distance.
 
 ```{r}
+df_numeric <- df[, c("city_development_index", "training_hours", "experience")]
 res.mout <- Moutlier(df_numeric,quantile=0.95, plot = F)
 plot(res.mout$md,res.mout$rd,col="cyan",pch=19)
 abline(h=res.mout$cutoff,col="red",lwd=2)
@@ -600,6 +536,111 @@ res.cat$test.chi2
 res.cat$category
 res.cat$quanti.var
 res.cat$quanti
+```
+
+## Variables study: quality report
+
+During the exploratory data analysis, it was observed that many variables contain blank observations corresponding to missing values. This values have been set as NA or a new class unknown has been converted if the missingness percentage was very high. Therefore, the functions gg_miss_upset and gg_miss_var from the naniar library were applied to study these missing values.
+
+It is worth noting that enrollee_id, city, city_development_index, relevant_experience, training_hours, and the target variable do not have any missing values.
+
+The majority of missing values are found in company_type and company_size, each accounting for approximately 30% of the missing data. These are followed by gender, which contain 24.5% of missing values. Finally, education_level, last_new_job, enrolled_university, major_discipline and experience only account for 0.3-2.5% of missing values.
+
+As expected, most observations with missing company_size also have missing company_type, indicating a general absence of company-related information. Interestingly, gender has many observations with missing values only in this variable, suggesting that it might not have been mandatory to provide a response.
+
+Not a high proportion of the observations have missing values across all variables, indicating that the missingness is not completely random across the dataset. Instead, it tends to be concentrated in specific variables, such as company_type, company_size, and gender, showing a clear pattern of missingness.
+
+Hence, observations with missing values should not be deleted, as this could introduce bias. Depending on the variable, missing values should either be imputed or the variable should not be used in the analysis.
+
+```{r}
+df_aux <- df
+df_aux$gender[which(df_aux$gender == "Other/Unknown")] <- NA
+df_aux$company_size[which(df_aux$company_size == "Unknown")] <- NA
+df_aux$company_type[which(df_aux$company_type == "Unknown")] <- NA
+
+gg_miss_var(df_aux[c(4,6:12)])
+gg_miss_upset(df_aux[c(4,6:12)])
+```
+
+A more detailed analysis of the missingness in the company_type variable reveals that missing observations are far from randomly distributed. Individuals whose company_size is unknown are disproportionately likely to fall into this category, making this factor the strongest indicator of missing company type. Additionally, people living in city_21 are also over-represented in the "Unknown" group. From a career and education perspective, this class contains a higher proportion of individuals who have never changed jobs, lack relevant work experience, and are currently enrolled in a full-time university program.
+
+Moreover, observations with missing values in company_type exhibit a city_development_index that is, on average, three units below the overall mean.
+
+```{r}
+res.cat <- catdes(df[c(3:15),], 11)
+res.cat$category
+res.cat$quanti
+```
+
+On the other hand, the missingness in the company_size variable appears to be systematically associated with a specific subgroup of individuals. Missing values are far more common among people who have never had a last new job, whose company_type is also unknown, and who report no relevant work experience. In addition, they are clearly over-represented among residents of city_21, which confirms that individuals living in this city tend to have less complete employment records.
+
+Moreover, observations with missing values in company_size have, on average, experience and city_development_index values that are approximately two and three units below the overall mean, respectively.
+
+```{r}
+df[c(3:15),]
+res.cat <- catdes(df[c(3:15),], 10)
+res.cat$category
+res.cat$quanti
+```
+
+## Individuals study: quality report
+
+In this section, we analyze the additional variables that were created in order to better understand the behavior of the observations in our dataset.
+
+Regarding missing values, we observe that approximately 46-47% of the observations do not contain any missing values. In contrast, around 19% of the observations have at least one missing value, while another 19% contain at least two missing values. Observations with three missing values represent approximately 10% of the total, ranking as the fourth most frequent group. The remaining cases correspond to very small proportions. Nevertheless, it is worth highlighting that some observations present a relatively high number of missing values: specifically, 12 observations contain up to 7 missing values.
+
+With respect to the isOutlier variable, approximately 4.5% of the observations are identified as outliers, either due to the numerical variables city_development_index or training_hours. In contrast, the variable experience does not present outliers. The remaining observations, approximately 95.5%, are therefore considered non-outliers.
+
+Finally, regarding multivariate outliers, a total of 852 observations are identified as multivariate outliers. As previously described, these represent approximately 4.44% of the total observations in the dataset.
+
+After analyzing the behavior of these variables, a new variable called allErrors is created. This variable summarizes, for each observation, the total number of detected issues by combining indicators of missing values (isNA), univariate outliers (isOutlier), and multivariate outliers (isMultivariateOutlier). 
+
+After computing this variable, we observe that some observations reach a maximum value of 10 allErrors. This value does not indicate a computational error, but rather corresponds to observations that simultaneously exhibit multiple missing values and are flagged as outliers. In particular, only one observation reaches this maximum value, corresponding to enrollee_id 15655.
+
+```{r}
+prop.table(table(df$isna)); prop.table(table(df$isoutlier)); prop.table(table(df$isMvOutlier))
+df$isMvOutlier <- as.numeric(df$isMvOutlier)
+df$allErrors <- df$isna + df$isoutlier + df$isMvOutlier
+summary(df$allErrors)
+```
+
+Below, we present the correlations among the numerical variables in the dataset, with particular emphasis on the newly computed numerical variables, in order to analyze the behavior of the individuals.
+
+It can be observed that the variables showing a relevant correlation with allErrors, defined as the sum of the indicators isNA, isOutlier, and isMultivariateOutlier, are the following.
+
+The variable training_hours shows a positive correlation with allErrors (0.207). This indicates that as the number of training hours increases, the total number of detected issues also increases. This behavior is likely explained by the strong correlation between training_hours and being identified as an outlier (0.69) or a multivariate outlier (0.59).
+
+In contrast, the variable experience is negatively correlated with allErrors (−0.216). This suggests that higher levels of experience are associated with a reduction in the total number of issues. This result is consistent with the negative correlation observed between experience and the presence of missing values (isNA, −0.23).
+
+Finally, the variable city_development_index also shows a negative correlation with allErrors. Therefore, higher values of the city development index are associated with fewer detected issues. This pattern is further supported by its negative correlation with isNA (−0.12) and isMultivariateOutlier (−0.11).
+
+Regarding the newly created indicator variables, it is worth highlighting that observations identified as univariate outliers show a strong correlation with being multivariate outliers (0.76). Similarly, the variable isMultivariateOutlier presents a strong correlation with allErrors, as can be observed in the correlation matrix.
+
+```{r}
+numeriqs <- df[, sapply(df, is.numeric)]
+corrlt <- cor(numeriqs); corrlt
+corrplot(corrlt, method = 'number')
+plot(numeriqs)
+```
+
+# Multiple linear regression model
+
+## Correlation between variables
+
+The numeric variables used as explanatory variables in the linear regression model should not be highly correlated, as multicollinearity can distort the estimation of coefficients and reduce the interpretability of the model.
+
+```{r}
+num_vars <- c("city_development_index", "training_hours", "experience")
+df_numeric <- df[, num_vars]
+```
+
+Training hours appear largely independent of the other variables, showing negligible correlations across the board. In contrast, experience shows a low moderate positive correlation with city_development_index, suggesting that individuals in more developed cities generally have higher levels of experience.
+
+```{r}
+corr_mat <- cor(df_numeric)
+corr_mat
+corrplot(corr_mat, method = "color", tl.col = "black", tl.srt = 45, addCoef.col = "black")
+plot(df_numeric)
 ```
 
 ## Profiling the target
@@ -674,48 +715,10 @@ barplot(table(df$major_discipline_grouped))
 ```
 
 We also ensured that the variables were treated as unordered factors, so that R does not interpret them as ordinal.
+
 ```{r}
 df$last_new_job <- factor(df$last_new_job, ordered = FALSE)
 df$company_size <- factor(df$company_size, ordered = FALSE)
-```
-
-# Analyzing the Individuals
-
-In this section, we first analyze the additional variables that were created in order to better understand the behavior of the observations in our dataset.
-
-Regarding missing values, we observe that approximately 46–47% of the observations do not contain any missing values. In contrast, around 19% of the observations have at least one missing value, while another 19% contain at least two missing values. Observations with three missing values represent approximately 10% of the total, ranking as the fourth most frequent group. The remaining cases correspond to very small proportions. Nevertheless, it is worth highlighting that some observations present a relatively high number of missing values: specifically, 12 observations contain up to 7 missing values.
-
-With respect to the isOutlier variable, approximately 5.22% of the observations are identified as outliers, either due to the numerical variables city_development_index or training_hours. In contrast, the variable experience does not present outliers, as it was previously transformed into a numerical format. The remaining observations, approximately 95.5%, are therefore considered non-outliers.
-
-Finally, regarding multivariate outliers, a total of 852 observations are identified as multivariate outliers. As previously described, these represent approximately 4.44% of the total observations in the dataset.
-
-After analyzing the behavior of these variables, a new variable called allErrors is created. This variable summarizes, for each observation, the total number of detected issues by combining indicators of missing values (isNA), univariate outliers (isOutlier), and multivariate outliers (isMultivariateOutlier). After computing this variable, we observe that some observations reach a maximum value of 10 allErrors. This value does not indicate a computational error, but rather corresponds to observations that simultaneously exhibit multiple missing values and are flagged as outliers. In particular, only one observation reaches this maximum value, corresponding to enrollee_id 15655.
-
-```{r}
-prop.table(table(df$isna)); prop.table(table(df$isoutlier)); prop.table(table(df$isMvOutlier))
-df$isMvOutlier <- as.numeric(df$isMvOutlier)
-df$allErrors <- df$isna + df$isoutlier + df$isMvOutlier
-summary(df$allErrors)
-```
-
-Below, we present the correlations among the numerical variables in the dataset, with particular emphasis on the newly computed numerical variables, in order to analyze the behavior of the individuals.
-
-It can be observed that the variables showing a relevant correlation with allErrors, defined as the sum of the indicators isNA, isOutlier, and isMultivariateOutlier, are the following.
-
-The variable training_hours shows a positive correlation with allErrors (0,207). This indicates that as the number of training hours increases, the total number of detected issues also increases. This behavior is likely explained by the strong correlation between training_hours and being identified as an outlier (0,69) or a multivariate outlier (0,59).
-
-In contrast, the variable experience is negatively correlated with allErrors (−0,216). This suggests that higher levels of experience are associated with a reduction in the total number of issues. This result is consistent with the negative correlation observed between experience and the presence of missing values (isNA, −0,23).
-
-Finally, the variable city_development_index also shows a negative correlation with allErrors. Therefore, higher values of the city development index are associated with fewer detected issues. This pattern is further supported by its negative correlation with isNA (−0,12) and isMultivariateOutlier (−0,11).
-
-Regarding the newly created indicator variables, it is worth highlighting that observations identified as univariate outliers show a strong correlation with being multivariate outliers (0,76). Similarly, the variable isMultivariateOutlier presents a strong correlation with allErrors, as can be observed in the correlation matrix.
-
-
-```{r}
-numeriqs <- df[, sapply(df, is.numeric)]
-corrlt <- cor(numeriqs); corrlt
-corrplot(corrlt, method = 'number')
-plot(numeriqs)
 ```
 
 
@@ -889,7 +892,7 @@ AIC(mdl22, mdl31, mdl32, mdl33, mdl34, mdl35, mdl36, mdl37, mdl38)
 vif(mdl22) # no multicollinearity present in the model
 ```
 
-# Before interactions we'll try to group categorical variables.
+#### Group categorical variables
 
 In this section, we aim to group categories of the categorical variables that are not statistically significant, with the objective of simplifying the model and improving the interpretability of the results.
 
@@ -897,24 +900,21 @@ In this section, we aim to group categories of the categorical variables that ar
 summary(mdl22)
 ```
 
-Next, the variable enrolled_university is grouped, as the category No_Enrollment accounts for approximately 73% of the observations. For this reason, a new variable with two categories is created, distinguishing between No_Enrollment and Enrollment, where the latter groups all remaining university enrollment categories.
+Taking a look at the estimates, it can be seen that the variable enrolled_university could be grouped, as the category no_enrollment accounts for approximately 73% of the observations. For this reason, a new variable with two categories is created, distinguishing between no_Enrollment and Enrollment, where the latter groups all remaining university enrollment categories. Notice that it continues to being better the mdl22, as it's the one that has the lowest AIC.
 
 ```{r}
-df_train$enrolled_university_grouped <- ifelse(df_train$enrolled_university == "no_enrollment","no_Enrollment","enrollment")
+df_train$enrolled_university_grouped <- ifelse(df_train$enrolled_university == "no_enrollment","no_Enrollment","Enrollment")
 prop.table(table(df_train$enrolled_university_grouped))
-
-df_test$enrolled_university_grouped <- ifelse(df_test$enrolled_university == "no_enrollment","no_Enrollment","enrollment")
-prop.table(table(df_test$enrolled_university_grouped))
 
 
 mdl221 <- glm(target ~ poly(city_development_index,4) + poly(experience,2) + training_hours + relevent_experience + enrolled_university_grouped + education_level + company_size + company_type + last_new_job, family = binomial, data = df_train)
 
-AIC(mdl221, mdl22)
-
-# It continues to being better the mdl22, it's the one that has the lowest AIC.
+AIC(mdl221, mdl22) # It continues to being better the mdl22, it's the one that has the lowest AIC.
 ```
 
-Next, we group the company_size categorical variable, as several of its categories are not statistically significant. Therefore, these categories are combined into a single group representing companies with fewer than 10,000 employees.
+It can also be seen that company_size categorical variable could be grouped, as several of its categories are not statistically significant. Therefore, these categories are combined into a single group representing companies with fewer than 10.000 employees.
+
+In this case, the AIC statistic reveals that taking the variable in its grouped form improves the model.
 
 ```{r}
 df_train$company_size_group <- ifelse(
@@ -951,17 +951,18 @@ prop.table(table(df_train$company_size_group))
 prop.table(table(df_test$company_size_group))
 
 
-mdl222 <- glm(target ~ poly(city_development_index,4) + poly(experience,2) + training_hours + relevent_experience + enrolled_university+ education_level + company_size_group + company_type + last_new_job, family = binomial, data = df_train)
+mdl222 <- glm(target ~ poly(city_development_index,4) + poly(experience,2) + training_hours + relevent_experience + enrolled_university + education_level + company_size_group + company_type + last_new_job, family = binomial, data = df_train)
 
-AIC(mdl222, mdl22) # Is Better the mdl222
+AIC(mdl222, mdl22) # The best is mdl222
 
 mdl223 <- glm(target ~ poly(city_development_index,4) + poly(experience,2) + training_hours + relevent_experience + enrolled_university_grouped + education_level + company_size_group + company_type + last_new_job, family = binomial, data = df_train)
 
-AIC(mdl22, mdl222, mdl223) # The best is mdl222.
-
-summary(mdl222)
-
+AIC(mdl22, mdl222, mdl223) # The best is mdl222
 ```
+
+Company_type is another variable that could potentially be grouped. However, the proposed groups based on their statistical measures do not seem coherent, and there are indications that such grouping could lead to overfitting.
+
+On the other hand, last_new_job and education_level do not seem suitable for grouping, as all their categories show differentiated behavior and contribute relevant information to the model.
 
 ### Modelling with interactions
 
@@ -970,6 +971,8 @@ Finally, we explored the inclusion of interactions between variables. After cons
 It is important to note that the stepwise procedure using the BIC criterion led to a model with a considerably larger AIC. This is expected, since AIC penalizes model complexity less strongly than BIC and is therefore more sensitive to improvements in deviance. When comparing the AIC-selected and BIC-selected models through a deviance test, the null hypothesis was rejected, indicating that the larger model provides a significantly better fit. For this reason, we proceeded with the more complex model.
 
 On the other hand, when comparing the small model with only the main effects to the larger AIC-selected model including interactions, the deviance test does reject the null hypothesis, suggesting that the interaction terms provide a significant improvement over the main-effects-only model.
+
+Finally, when computing the statistical tests for the regression coefficients, specifically testing the null hypothesis that each coefficient is equal to zero conditional on the rest of the variables being included in the model, it can be observed that the interactions terms poly(city_development_index, 4):relevant_experience and company_size_group:poly(experience, 2) are not statistically meaningful. Consequently, this interaction was removed from the model, even though the AIC statistic did not show a substantial improvement.
 
 ```{r}
 mdl41 <- glm(target ~ (poly(city_development_index, 4) + poly(experience, 2) + training_hours)*(relevent_experience + enrolled_university + education_level + company_size_group + company_type + last_new_job), family = binomial, data = df_train)
@@ -987,23 +990,24 @@ anova(stepinteractionsAIC, mdl22, test = "Chisq")
 Anova(stepinteractionsAIC, test="LR")
 ```
 
-Hence, the final model selected has been:  mdl_f <- glm(target ~ poly(city_development_index, 4) * (relevent_experience + enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_size_group + company_type + last_new_job) + training_hours, family=binomial(), data=df_train)
+Hence, the final model selected has been:  target ~ poly(city_development_index, 4) * (enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_type + last_new_job) + training_hours + relevent_experience
 
 Although some unadjusted GVIFs are very large, the GVIF adjusted for the degrees of freedom yields a much more interpretable value, which is the relevant measure for assessing multicollinearity. Hence, there is no alarming multicollinearity in the model, and all predictors can be safely included without compromising coefficient estimates or interpretability.
 
 Note that the marginal plots show that the model aligns very well with the data. Nonetheless, the smooth in the residual plots is still not completely flat. This suggests that there may be some influential observations preventing the model from fully capturing the underlying structure of the data.
 
 ```{r}
-mdl_f <- glm(target ~ poly(city_development_index, 4) * (relevent_experience + enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_size_group + company_type + last_new_job) + training_hours, family=binomial(), data=df_train)
+mdl_f <- glm(target ~ poly(city_development_index, 4) * (enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_type + last_new_job) + training_hours + relevent_experience, family=binomial(), data=df_train)
+
 summary(mdl_f)
 vif(mdl_f)
 residualPlots(mdl_f)
 marginalModelPlots(mdl_f)
-Anova(mdl_f, test = "LR")
-mdl_f <- glm(target ~ poly(city_development_index, 4) * (enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_type + last_new_job) + training_hours, family=binomial(), data=df_train)
+
+Anova(mdl_f, test = "LR") # all coefficients are statistically meaningful
 ```
 
-### Detect influential data
+### Influential data detection
 
 The influential data points were identified using Pearson residuals, leverage (hat values), and Cook’s distance.
 
@@ -1015,30 +1019,32 @@ Moreover, the boxplot of the hat values revealed several outstanding outliers, s
 df_train_clean <- df_train
 idx_influential <- c()
 
-mdl_f <- glm(target ~ poly(city_development_index, 4) * (enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_type + last_new_job) + training_hours, family=binomial(), data=df_train_clean)
+mdl_f <- glm(target ~ poly(city_development_index, 4) * (enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_type + last_new_job) + training_hours + relevent_experience, family=binomial(), data=df_train_clean)
 
 par(mfrow=c(1,1))
 rstudent_influential <- rstudent(mdl_f)
 Boxplot(rstudent_influential)
 abline(h = 3, col = 'red');abline(h = -3, col = 'red')
 idx_rstudent <- which(rstudent_influential > 3 | rstudent_influential < -3); length(idx_rstudent);
+# 1 observation should be removed
 
 hat_influential <- hatvalues(mdl_f)
 Boxplot(hat_influential)
 
 cook_influential <- cooks.distance(mdl_f)
 Boxplot(cook_influential)
-idx_cooks <- which(cook_influential > 0.5); length(idx_cooks);
+idx_cooks <- which(cook_influential > 0.02); length(idx_cooks);
+# 1 observation should be removed
 
 idx_influential <- c(idx_influential, idx_cooks, idx_rstudent)
 
 df_train_clean <- df_train_clean[-c(idx_cooks, idx_rstudent),]
 ```
 
-After removing the outstanding Cook’s distance and Pearson residuals outliers, there is still one observation that highly influences the model and should be removed.
+After removing the influential observations, there is still some observation that highly influences the model and should be removed.
 
 ```{r}
-mdl_f <- glm(target ~ poly(city_development_index, 4) * (enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_type + last_new_job) + training_hours, family=binomial(), data=df_train_clean)
+mdl_f <- glm(target ~ poly(city_development_index, 4) * (enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_type + last_new_job) + training_hours + relevent_experience, family=binomial(), data=df_train_clean)
 
 par(mfrow=c(1,1))
 rstudent_influential <- rstudent(mdl_f)
@@ -1051,9 +1057,10 @@ Boxplot(hat_influential)
 
 cook_influential <- cooks.distance(mdl_f)
 Boxplot(cook_influential)
-idx_cooks <- which(cook_influential > 0.5); length(idx_cooks);
+idx_cooks <- which(cook_influential > 0.02); length(idx_cooks);
 
 idx_influential <- c(idx_influential, idx_cooks, idx_rstudent)
+df_train_clean <- df_train_clean[-c(idx_cooks, idx_rstudent),]
 ```
 
 Note that we have removed the most influential observations. Some points still have high leverage and could be considered a priori influential, but since they are not outstanding in the Cook’s distance plot, we did not remove them to avoid introducing bias by excessively pruning the data.
@@ -1063,11 +1070,13 @@ The smooth of the residuals plot is nearly flat, indicating that the model fits 
 The marginal model plots show that the variables are well aligned with the data, confirming that the functional forms chosen for each predictor adequately capture their relationships with the response.
 
 ```{r}
-mdl_f <- glm(target ~ poly(city_development_index, 4) * (enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_type + last_new_job) + training_hours, family=binomial(), data=df_train_clean)
+mdl_f <- glm(target ~ poly(city_development_index, 4) * (enrolled_university + education_level + company_size_group + company_type + last_new_job) + poly(experience, 2) * (company_type + last_new_job) + training_hours + relevent_experience, family=binomial(), data=df_train_clean)
+
 par(mfrow=c(1,1))
 rstudent_influential <- rstudent(mdl_f)
 Boxplot(rstudent_influential)
 abline(h = 3, col = 'red');abline(h = -3, col = 'red')
+idx_rstudent <- which(rstudent_influential > 3 | rstudent_influential < -3); length(idx_rstudent);
 
 hat_influential <- hatvalues(mdl_f)
 Boxplot(hat_influential)
@@ -1082,7 +1091,7 @@ marginalModelPlots(mdl_f)
 vif(mdl_f)
 ```
 
-It is important to highlight that the influential observations do not follow any concerning or systematic pattern.
+It is important to highlight that the influential observations do not follow any concerning or systematic pattern, except that they were all classified as multivariate outliers.
 
 ```{r}
 df_train_clean[idx_influential,]
@@ -1146,7 +1155,7 @@ Unlike the Hosmer-Lemeshow test, the Brier Score is robust to large sample sizes
 
 ```{r}
 target_numeric <- as.numeric(as.character(df_train_clean$target))
-hoslem.test(target_numeric, prob.tst, g = 10)
+hoslem.test(target_numeric, prob.tst, g = 4)
 BrierScore(target_numeric, prob.tst)
 ```
 
@@ -1201,46 +1210,50 @@ names(eff)
 
 **Categorical variables**
 
-*Enrolled university*
-Belonging to the category "no enrollment" is associated with a decrease in the odds of the positive outcome of approximately 30.76% compared to the reference category Full time course, all else being equal.
+*relevent_experience*
+Belonging to the category "no relevent experience" is associated with an increase in the odds of the positive outcome of approximately 23.29% compared to the reference category "relevent experience", all else being equal.
 
 ```{r}
-# Enrolled univerity
-val3 <- exp(coef(mdl_f)["enrolled_universityno_enrollment"]); val3
-(1-val3)*100
+val <- exp(coef(mdl_f)["relevent_experienceNo relevent experience"]); val
+(val-1)*100
+
+plot(eff$relevent_experience,
+     multiline=TRUE,
+     main="Effect of Relevent experie")
+```
+
+*training_hours*
+An increment of one unit in training_hours is associated with a decrese n the odds of the positive outcome of approximately 0.1%, all else being equal.
+
+```{r}
+val <- exp(coef(mdl_f)["training_hours"]); val
+(1-val)*100
+plot(eff$training_hours,
+     multiline=TRUE,
+     main="Effect of Training Hours")
 ```
 
 *Other variables*
 
-The rest of categories interpretation depend on the category level, the city development index, the experience values and/or the training hours since there are interactions between variables.
+The rest of categories interpretation depend on the category level, the city development index and/or the experience values since there are interactions between variables.
 
 Hence, it is better to interpret these variables using all effects plots.
 
-For each category of Enrolled University, the effect of the city_development_index is strongly non-linear: the predicted probability increases sharply at low city_development_index values, reaches a maximum around 0.58-0.60, and then gradually decreases in highly developed cities. Nonetheless, both functions show intercepts, indicating that the interaction between enrolled_university and city development is indeed meaningful.
-
-For individuals with low levels of experience, predicted probabilities are relatively similar across company types. However, as experience increases, substantial differences emerge, particularly in the public sector and NGOs, where experience has a stronger positive effect compared to startups and other company types.
-
-For all last_new_job categories, individuals are much more likely to be job-seeking in less developed cities, while their probability drops sharply as the city_development_index increases. Although all categories reach an initial minimum around city development indexes values 0.75-0.8, their behavior begins to diverge substantially at higher development levels. In particular, the category for last new job being 4 years stands out for displaying a markedly different pattern compared with the rest. These discrepancies confirm that the interaction between last_new_job and city_development_index is meaningful and captures important heterogeneity in the relationship.
+For all last_new_job categories, individuals are much more likely to be job-seeking in less developed cities, while their probability drops sharply as the city_development_index increases. Although all categories reach an initial minimum around city development indexes values 0.75-0.8, their behavior begins to diverge substantially at higher development levels. In particular, the category for last new job being never stands out for displaying a markedly different pattern compared with the rest. These discrepancies confirm that the interaction between last_new_job and city_development_index is meaningful and captures important heterogeneity in the relationship.
 
 The relationship between experience and the probability of being job-seeking varies considerably depending on the last_new_job category. Individuals who have never changed jobs, changed jobs three years ago, or more than four years ago tend to have lower probabilities at extreme experience levels and higher probabilities at mid-range experience. Conversely, those who changed jobs one, two, or four years ago exhibit the opposite pattern. This is very outstanding, as one might expect similar patterns within the similar last_new_job groups.
 
-For all the education levels, the effect of the city_development_index is strongly non-linear. As in previous cases, the predicted probability increases sharply at low city_development_index values, reaches a maximum around 0.58-0.60, and then gradually decreases in highly developed cities. The growth of functions, however, differ in each education level, since the five functions clearly show intercepts, indicating that the interaction between has education level and city development is indeed meaningful.
+Except for Phd student, the remaining categories seem to follow a similar pattern, showing comparable trends in how the city_development_index relates to the target probability. However, at high levels of city development, the probabilities across categories tend to converge.
 
-Individuals working in companies with fewer than 10,000 employees or in the “Unknown” company-size category tend to show higher probabilities of being job-seeking in less developed cities. As the city development index increases, these probabilities generally decline or stabilize, and differences across company-size groups become less pronounced. For companies with 10,000 or more employees, the relationship with city development is non-linear, with probabilities increasing at intermediate levels of development before decreasing again. Overall, the convergence of the curves at higher levels of city development suggests that company-size effects are attenuated in more developed urban contexts.
+For both the more than 10000 and less than 10000 employees categories, the effect of the city_development_index is strongly non-linear: the predicted probability increases sharply at low city_development_index values, reaches a maximum around 0.58-0.60, and then gradually decreases in highly developed cities. Nonetheless, both functions show intercepts, indicating that the interaction between company sized and city development is indeed meaningful. Note that category Unknown follows a complete different pattern.
 
-Finally, the relationship between city_development_index and the target probability is particularly striking. All company_type categories start with relatively high probabilities of being job-seeking in less developed cities and show a marked decline as the city development index increases. However, the Startup and Other categories display noticeably different and more irregular patterns, standing out from the overall trend and deviating more strongly from the rest. This reinforces the relevance of the interaction between company_type and city_development_index in explaining job-seeking behavior. 
+The relationship between city_development_index and the target probability is particularly striking. All company_type categories start with relatively high probabilities of being job-seeking in less developed cities and show a marked decline as the city development index increases. However, the Startup and Other categories display noticeably different and more irregular patterns, standing out from the overall trend and deviating more strongly from the rest. This reinforces the relevance of the interaction between company_type and city_development_index in explaining job-seeking behavior.
+
+The relationship between experience and the target probability strongly depends on the company_type category. No clear or common pattern emerges across groups, as the curves intersect at different points. This highlights the importance of the interaction between experience and company type in capturing heterogeneous job-seeking behavior.
+
+Finally, notice that for both the full time and no_enrollment categories, the effect of the city_development_index is strongly non-linear: the predicted probability increases sharply at low city_development_index values, reaches a maximum around 0.58-0.60, and then gradually converges to a constant probability. Nonetheless, both functions show intercepts, indicating that the interaction between company euniversity enrollment and city development is indeed meaningful. Note that category part time course follows a complete different pattern.
 
 ```{r}
-# Interaction city_development_index with enrolled_university.
-plot(eff$`poly(city_development_index,4):enrolled_university`,
-     multiline=TRUE,
-     main="Effect of City Development by Enrolled Universtiy")
-
-# Interaction experience with relevent_experience
-plot(eff$`company_type:poly(experience,2)`,
-     multiline=TRUE,
-     main="Effect of Company Type by Experience")
-
 # Interaction city_development_index with last_new_job
 plot(effect(term = "poly(city_development_index,4):last_new_job", mod = mdl_f, xlevels = list(city_development_index = seq(quantile(df$city_development_index, 0.1), quantile(df$city_development_index, 0.9), length = 100), last_new_job = levels(df$last_new_job))),multiline = TRUE,ci.style = "none",main = "Effect of City Development Index by Last New Job")
 
@@ -1252,13 +1265,19 @@ plot(eff$`poly(city_development_index,4):education_level`,
      multiline=TRUE,
      main="Effect of City Development by Education Level")
 
-
 # Interaction city_development_index with company_size
 plot(effect(term = "poly(city_development_index,4):company_size_group",mod = mdl_f,xlevels = list(city_development_index = seq(min(df$city_development_index),max(df$city_development_index),length = 100),company_size_group = levels(df_train$company_size_group))),multiline = TRUE,ci.style = "none",main = "Effect of City Development Index by Company Size")
 
-
 # Interaction city_development_index with company_type
 plot(effect(term = "poly(city_development_index,4):company_type", mod = mdl_f, xlevels = list(city_development_index = seq(quantile(df$city_development_index, 0.1), quantile(df$city_development_index, 0.9), length = 100), company_type = levels(df$company_type))),multiline = TRUE,ci.style = "none",main = "Effect of City Development Index by Company Type")
+
+# Interaction experience with company_type
+plot(effect(term = "company_type:poly(experience,2)", mod = mdl_f, xlevels = list(experience = seq(min(df$experience), max(df$experience), length = 50))),multiline = TRUE,ci.style = "none",main = "Effect of Experience by Company Type")
+
+# Interaction city_development_index,4 with enrolled_university
+plot(eff$`poly(city_development_index,4):enrolled_university`,
+     multiline=TRUE,
+     main="Effect of City Development by Enrolled to university")
 ```
 
 ## References
